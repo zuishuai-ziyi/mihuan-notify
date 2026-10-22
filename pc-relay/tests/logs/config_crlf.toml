@@ -1,0 +1,11 @@
+[server]
+host = "127.0.0.1"
+port = 8787
+[webhook]
+token = "abc"
+[phone]
+url = "http://y"
+token = "t"
+[admin]
+password = "p"
+secret = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"

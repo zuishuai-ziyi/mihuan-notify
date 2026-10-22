@@ -1,0 +1,16 @@
+webui/node_modules
+webui/src
+webui/index.html
+webui/vite.config.js
+webui/package.json
+webui/package-lock.json
+relay.db
+relay.db-wal
+relay.db-shm
+__pycache__
+*.pyc
+tests
+Dockerfile
+docker-compose.yml
+.dockerignore
+README.md

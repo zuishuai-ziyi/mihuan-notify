@@ -1,0 +1,8 @@
+# Android 构建产物与签名（不提交）
+.gradle/
+build/
+local.properties
+keystore/
+keystore.properties
+*.keystore
+*.jks

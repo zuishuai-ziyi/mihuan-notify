@@ -1,0 +1,10 @@
+[server]
+host = "127.0.0.1"
+port = 8787
+[webhook]
+token = "test-webhook-token"
+[phone]
+url = "http://127.0.0.1:8799"
+token = "test-phone-token"
+timeout_seconds = 5
+retries = 3

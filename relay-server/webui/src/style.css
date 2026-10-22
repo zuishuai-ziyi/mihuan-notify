@@ -1,0 +1,82 @@
+:root {
+  --bg: #f5f7fa;
+  --panel: #ffffff;
+  --border: #e4e7ed;
+  --text: #303133;
+  --text2: #909399;
+  --primary: #409eff;
+  --primary-dark: #337ecc;
+  --success: #67c23a;
+  --danger: #f56c6c;
+  --warning: #e6a23c;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: -apple-system, "Segoe UI", "Microsoft YaHei", sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 14px;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 20px;
+  margin-bottom: 16px;
+}
+
+.panel h2 {
+  font-size: 15px;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+.btn {
+  display: inline-block;
+  padding: 7px 16px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--panel);
+  color: var(--text);
+  cursor: pointer;
+  font-size: 13px;
+  transition: all .15s;
+}
+.btn:hover { border-color: var(--primary); color: var(--primary); }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+.btn.primary { background: var(--primary); border-color: var(--primary); color: #fff; }
+.btn.primary:hover { background: var(--primary-dark); }
+.btn.danger { color: var(--danger); border-color: var(--danger); }
+.btn.danger:hover { background: var(--danger); color: #fff; }
+.btn.small { padding: 3px 10px; font-size: 12px; }
+
+input[type="text"], input[type="password"], textarea, select {
+  width: 100%;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 13px;
+  font-family: inherit;
+  outline: none;
+}
+input:focus, textarea:focus { border-color: var(--primary); }
+textarea { font-family: Consolas, "Courier New", monospace; resize: vertical; }
+
+.tag {
+  display: inline-block;
+  padding: 1px 8px;
+  border-radius: 3px;
+  font-size: 12px;
+  line-height: 18px;
+}
+.tag.ok { background: #f0f9eb; color: var(--success); }
+.tag.fail { background: #fef0f0; color: var(--danger); }
+.tag.high { background: #fdf6ec; color: var(--warning); }
+
+.msg { padding: 8px 12px; border-radius: 4px; margin-top: 10px; font-size: 13px; }
+.msg.ok { background: #f0f9eb; color: var(--success); }
+.msg.err { background: #fef0f0; color: var(--danger); }

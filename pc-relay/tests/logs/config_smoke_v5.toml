@@ -1,0 +1,18 @@
+# pc-relay 配置（应用自动生成，可在 Web 管理界面修改）
+
+[server]
+host = "127.0.0.1"   # 首次启动仅本机可访问；完成配置后可在界面改为 0.0.0.0
+port = 8787
+
+[webhook]
+token = "c42df2eed1a6ac8aee8ec97b7219788ea91f9b2bfe8610df1ef66c1ee8c08885"   # 第三方应用调用 /webhook 用
+
+[phone]
+url = "http://127.0.0.1:18999"   # 手机端地址，形如 http://192.168.1.23:8788（App「复制配置信息」可获取）
+token = "test-phone-token"   # 手机 App 显示的 Token
+timeout_seconds = 5
+retries = 3
+
+[admin]
+password = "wizard-pass-123"   # Web 管理界面登录密码（首次配置向导中设置）
+secret = "eX\u0004\e$ױQp�� 7��`Pf�O�_\u0007��zw�U�\fM"   # 会话签名密钥（留空自动生成）

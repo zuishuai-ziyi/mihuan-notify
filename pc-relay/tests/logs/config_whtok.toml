@@ -1,0 +1,13 @@
+[server]
+host = "127.0.0.1"
+port = 18793
+[webhook]
+token = "wh-sec-e2e-token-abcdef"
+[phone]
+url = "http://127.0.0.1:18794"
+token = "phone-tok"
+timeout_seconds = 5
+retries = 3
+[admin]
+password = "e2e-admin-pw"
+secret = "0123456789abcdef"

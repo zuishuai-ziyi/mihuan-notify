@@ -1,0 +1,48 @@
+# ===== 构建产物（全部可由 scripts/ 重新产出）=====
+build/
+dist/
+pc-relay/webui/dist/
+relay-server/webui/dist/
+android-app/.gradle/
+android-app/build/
+
+# ===== 密钥与敏感文件（严禁提交）=====
+android-app/keystore/
+android-app/keystore.properties
+*.keystore
+*.jks
+*.pem
+*.env
+
+# ===== 运行时数据（含 token/密码哈希，首启自动生成）=====
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+pc-relay/config.toml*
+pc-relay/deploy/
+*.log
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# ===== Node =====
+node_modules/
+
+# ===== Android =====
+android-app/local.properties
+android-app/app/build/
+android-app/dist/
+*.apk.idsig
+
+# ===== 工具 / IDE / 系统文件 =====
+.pi/
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
