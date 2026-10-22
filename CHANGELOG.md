@@ -9,6 +9,7 @@
 
 ### 新增
 - 项目以开源形式公开发布：补齐 LICENSE（MIT）、CONTRIBUTING、CHANGELOG、.gitignore/.gitattributes 等仓库规范文件。
+- CI/CD：GitHub Actions——`ci.yml`（push/PR 自动跑 PC e2e 33+25 用例、relay 冒烟 30 用例、Android 双包构建、Docker 构建检查）；`release.yml`（推 `v*` tag 自动构建 PC zip / Android APK / GHCR 镜像并创建 GitHub Release）。
 
 ## 历史版本（公开仓库建立前）
 

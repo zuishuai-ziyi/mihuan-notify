@@ -1,0 +1,215 @@
+name: Release
+
+# 推送 v* tag 触发：构建 PC exe 包 / Android APK / 中继 Docker 镜像（GHCR），并自动创建 GitHub Release
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-pc-windows:
+    name: PC 端 Windows exe 包
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 构建 WebUI（PyInstaller spec 要求 webui/dist 存在）
+        shell: bash
+        run: |
+          cd pc-relay/webui
+          npm ci
+          npm run build
+
+      - name: 安装依赖 + PyInstaller
+        run: |
+          pip install -r pc-relay/requirements.txt pyinstaller
+
+      - name: PyInstaller 打包（onedir）
+        run: >
+          pyinstaller pc-relay.spec --noconfirm
+          --distpath build/pyinstaller/dist
+          --workpath build/pyinstaller/work
+
+      - name: 组装发布 zip
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $ver = $env:GITHUB_REF_NAME -replace '^v', ''
+          $name = "mihuan-notify-pc-$ver-win64"
+          New-Item -ItemType Directory -Force -Path "stage/$name" | Out-Null
+          Copy-Item -Recurse -Force "build/pyinstaller/dist/pc-relay/*" "stage/$name/"
+          Copy-Item "pc-relay/manage.py" "stage/$name/"
+          Copy-Item "docs/deploy-pc-exe.md" "stage/$name/使用说明.md"
+          New-Item -ItemType Directory -Force -Path "dist" | Out-Null
+          Compress-Archive -Path "stage/$name" -DestinationPath "dist/$name.zip"
+          Get-Item "dist/$name.zip" | Select-Object Name, Length
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: pc-windows-zip
+          path: dist/*.zip
+          if-no-files-found: error
+
+  build-android:
+    name: Android APK（release + debug）
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      # 可选 secrets：ANDROID_KEYSTORE_BASE64（keystore 的 base64）
+      #            + ANDROID_KEYSTORE_PROPERTIES（keystore.properties 全文，storeFile=keystore/release.keystore）
+      # 未配置时 release 回退 debug 签名（build.gradle.kts 内建逻辑）
+      - name: 解码签名密钥（可选 secrets）
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PROPS: ${{ secrets.ANDROID_KEYSTORE_PROPERTIES }}
+        run: |
+          if [ -n "$KS_B64" ] && [ -n "$KS_PROPS" ]; then
+            mkdir -p android-app/keystore
+            printf '%s' "$KS_B64" | base64 -d > android-app/keystore/release.keystore
+            printf '%s' "$KS_PROPS" > android-app/keystore.properties
+            echo "已配置 release 签名"
+          else
+            echo "未配置签名 secrets，release APK 为 debug 签名（仅本地覆盖安装用）"
+          fi
+
+      - name: Gradle 构建 release + debug
+        working-directory: android-app
+        run: gradle assembleRelease assembleDebug --no-daemon
+
+      - name: 整理 APK 命名
+        env:
+          VER: ${{ github.ref_name }}
+        run: |
+          mkdir -p apks
+          cp android-app/app/build/outputs/apk/release/app-release.apk "apks/mihuan-notify-android-$VER-release.apk"
+          cp android-app/app/build/outputs/apk/debug/app-debug.apk   "apks/mihuan-notify-android-$VER-debug.apk"
+          ls -l apks
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apks
+          path: apks/*.apk
+          if-no-files-found: error
+
+  build-relay-image:
+    name: 中继服务器镜像（GHCR）
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Dockerfile 直接 COPY webui/dist，需先本地构建
+      - name: 构建 relay WebUI
+        run: |
+          cd relay-server/webui
+          npm ci
+          npm run build
+
+      - uses: docker/setup-buildx-action@v3
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Docker 镜像标签
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/mihuan-relay
+          tags: |
+            type=semver,pattern={{version}}
+            type=raw,value=latest
+
+      - uses: docker/build-push-action@v6
+        with:
+          context: relay-server
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  release:
+    name: 创建 GitHub Release
+    needs: [build-pc-windows, build-android, build-relay-image]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: pc-windows-zip
+          path: artifacts
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: android-apks
+          path: artifacts
+
+      - name: 生成 Release 附加说明
+        run: |
+          cat >> body.md <<'EOF'
+          ## 产物
+
+          | 文件 | 说明 |
+          |---|---|
+          | `mihuan-notify-pc-*-win64.zip` | PC 端免安装包（`pc-relay.exe` + `_internal/` 须同目录，双击运行） |
+          | `mihuan-notify-android-*-release.apk` | 手机端（优先；未配置签名 secrets 时为 debug 签名，见下） |
+          | `mihuan-notify-android-*-debug.apk` | 手机端调试版 |
+
+          ## 中继服务器镜像（仅中继模式需要）
+
+          ```bash
+          docker pull ghcr.io/zuishuai-ziyi/mihuan-relay:latest
+          ```
+
+          部署说明见 [relay-server/README.md](https://github.com/zuishuai-ziyi/mihuan-notify/blob/main/relay-server/README.md)。
+
+          ## Android 签名说明
+
+          仓库未配置 `ANDROID_KEYSTORE_BASE64` / `ANDROID_KEYSTORE_PROPERTIES` secrets 时，
+          CI 构建的 release APK 为 **debug 签名**（与本地无密钥构建行为一致）；
+          debug 与 release 签名的 APK 互相覆盖安装需先卸载（Token 会重置）。
+          EOF
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          body_path: body.md
+          files: |
+            artifacts/*.zip
+            artifacts/*.apk

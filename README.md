@@ -1,5 +1,7 @@
 # 跨设备通知转发系统（PC WebHook → 手机 → 小米手环）
 
+[![CI](https://github.com/zuishuai-ziyi/mihuan-notify/actions/workflows/ci.yml/badge.svg)](https://github.com/zuishuai-ziyi/mihuan-notify/actions/workflows/ci.yml)
+
 跨设备通知系统：**PC 端服务**接收第三方应用的 WebHook 调用，转发到**手机端 Android App**，App 发出系统通知，由**小米运动健康**监听并转发到**小米手环**。
 
 支持两种投递模式，PC 端设置页可随时切换（手机端有对应模式开关）：
@@ -263,3 +265,13 @@ bash pc-relay/tests/e2e_full.sh
 各组件版本号：PC `2.2.3` · Android `2.2` · 中继服务器 `1.0.1`，版本历史见 [CHANGELOG.md](CHANGELOG.md)。
 
 本项目以 [MIT License](LICENSE) 开源。欢迎通过 Issue 反馈问题、按 [CONTRIBUTING.md](CONTRIBUTING.md) 提交 PR。
+
+## CI/CD 与发布
+
+- **CI**（[.github/workflows/ci.yml](.github/workflows/ci.yml)）：推送到 `main` 或提 PR 时自动运行——PC 端 e2e（33 + 25 用例，含 WebUI 渲染检查）、relay-server 冒烟（30 用例）、Android debug/release 双包构建、中继镜像构建检查。
+- **发布**（[.github/workflows/release.yml](.github/workflows/release.yml)）：推 `v*` tag 自动构建并创建 [GitHub Release](https://github.com/zuishuai-ziyi/mihuan-notify/releases)，产物：
+  - `mihuan-notify-pc-<版本>-win64.zip`——PC 端免安装包（Windows runner PyInstaller 打包）
+  - `mihuan-notify-android-<版本>-{release,debug}.apk`——手机端（配置签名 secrets 则 release 签名，否则回退 debug 签名）
+  - Docker 镜像 `ghcr.io/zuishuai-ziyi/mihuan-relay:{版本,latest}`（中继服务器）
+
+发布操作：更新各组件版本号 → 提交 → `git tag v<版本> && git push origin v<版本>`，其余全自动（详见 [CONTRIBUTING.md](CONTRIBUTING.md) 发布流程）。

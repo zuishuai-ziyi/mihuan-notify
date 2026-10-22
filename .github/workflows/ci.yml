@@ -1,0 +1,132 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pc-tests:
+    name: PC 端 e2e（33 + 25 用例，含 WebUI 渲染检查）
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: 构建 PC WebUI
+        run: |
+          cd pc-relay/webui
+          npm ci
+          npm run build
+
+      - name: 构建 relay WebUI（中继 e2e「两侧 WebUI」用例需要）
+        run: |
+          cd relay-server/webui
+          npm ci
+          npm run build
+
+      # e2e.sh / e2e_relay.sh 固定使用 pc-relay/.venv/bin/python
+      - name: 创建 venv 并安装 PC 依赖
+        run: |
+          cd pc-relay
+          python3 -m venv .venv
+          .venv/bin/pip install -r requirements.txt
+
+      - name: PC 本地 e2e（33 用例）
+        run: bash pc-relay/tests/e2e.sh
+
+      - name: 中继模式 e2e（25 用例）
+        run: bash pc-relay/tests/e2e_relay.sh
+
+  relay-tests:
+    name: relay-server 冒烟（30 用例）
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: 安装 relay-server 依赖
+        run: pip install -r relay-server/requirements.txt
+
+      - name: 冒烟测试
+        run: bash relay-server/tests/smoke.sh
+
+  android-build:
+    name: Android 构建（debug + release）
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      # 无签名 secrets 时 release 回退 debug 签名（build.gradle.kts 内建逻辑）
+      - name: 解码签名密钥（可选 secrets）
+        env:
+          KS_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KS_PROPS: ${{ secrets.ANDROID_KEYSTORE_PROPERTIES }}
+        run: |
+          if [ -n "$KS_B64" ] && [ -n "$KS_PROPS" ]; then
+            mkdir -p android-app/keystore
+            printf '%s' "$KS_B64" | base64 -d > android-app/keystore/release.keystore
+            printf '%s' "$KS_PROPS" > android-app/keystore.properties
+            echo "已配置 release 签名"
+          else
+            echo "未配置签名 secrets，release 回退 debug 签名"
+          fi
+
+      - name: Gradle 构建 debug + release
+        working-directory: android-app
+        run: gradle assembleDebug assembleRelease --no-daemon
+
+      - name: 上传 APK（构建检查用）
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-apks-ci
+          path: android-app/app/build/outputs/apk/*/app-*.apk
+          retention-days: 7
+          if-no-files-found: error
+
+  docker-build:
+    name: relay-server 镜像构建检查
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # Dockerfile 直接 COPY webui/dist，需先本地构建
+      - name: 构建 relay WebUI
+        run: |
+          cd relay-server/webui
+          npm ci
+          npm run build
+
+      - name: Docker 构建
+        run: docker build -t mihuan-relay:ci relay-server

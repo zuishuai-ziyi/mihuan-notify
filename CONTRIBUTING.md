@@ -76,6 +76,22 @@ cd webui && npm install && npm run build && cd ..
 3. 本地跑通上表离线用例。
 4. PR 描述写清：动机、改动点、测试情况；UI 改动附截图。
 
+## 发布流程（维护者）
+
+发布由 GitHub Actions 自动完成（`.github/workflows/release.yml`）：推 `v*` tag → 自动构建三产物并创建 GitHub Release：
+
+1. 确认 CI 在 `main` 上绿，更新各组件版本号（`pc-relay/main.py` 的 `VERSION`、`android-app/app/build.gradle.kts` 的 `versionName`/`versionCode`、`relay-server/store.py` 的 `VERSION`）+ `CHANGELOG.md`，提交。
+2. `git tag vX.Y.Z && git push origin vX.Y.Z`。
+3. Actions 自动产出：PC 免安装 zip（Windows runner PyInstaller）、Android release/debug APK、`ghcr.io/zuishuai-ziyi/mihuan-relay:{X.Y.Z,latest}` 镜像，并创建带自动 release notes 的 Release。
+
+### Android 签名（可选 secrets）
+
+CI 默认无密钥，release APK 回退 debug 签名（与本地无密钥构建一致）。若需正式签名，在仓库
+Settings → Secrets and variables → Actions 配置两个 secret：
+
+- `ANDROID_KEYSTORE_BASE64`：`base64 -w0 android-app/keystore/release.keystore` 的输出
+- `ANDROID_KEYSTORE_PROPERTIES`：`keystore.properties` 全文，其中 `storeFile=keystore/release.keystore`（相对 `android-app/` 根）
+
 ## 反馈问题
 
 Issue 请附：组件与版本（PC/Android/中继各自版本号）、复现步骤、期望与实际行为、相关日志（**先脱敏 token/密码**）。
