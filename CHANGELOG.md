@@ -5,6 +5,15 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## v2.7.0（未发布）
+
+### 修复（Android）
+- **自定义图标选图后提示「图片读取失败」**：`BitmapFactory.decodeStream()` 在 `inJustDecodeBounds = true` 时返回 null（只填充尺寸字段），旧代码错误地把它的返回值当成「流已打开」的判据，导致 `saveIconFromUri()` 永远提前返回 false。改为单独判断 `openInputStream` 是否为 null。
+- **点「取消」也被当作添加成功**：部分桌面（如 Lawnchair）在用户拒绝固定快捷方式时仍会发送 resultIntent，原来「收到回调即视为已确认」的假设不成立，导致取消后内置图标被隐藏、桌面却没有新图标，应用失去入口。改为回调后用 `ShortcutManager.getPinnedShortcuts()` 查询快捷方式是否真的被固定，未固定则提示「未添加到桌面，已保持原外观」并保持原方案。
+- **确认添加后原图标未立即消失**：原逻辑只在下次启动时才收敛 alias。现在确认成功即调用 `AppAppearance.apply()`，与 toast 提示一致。
+
+versionCode 12，versionName 2.7。
+
 ## v2.6.0（未发布）
 
 ### 修复（Android）

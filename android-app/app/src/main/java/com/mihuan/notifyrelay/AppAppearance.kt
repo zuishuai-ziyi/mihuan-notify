@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ShortcutManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
@@ -95,8 +96,10 @@ object AppAppearance {
         return try {
         val resolver = ctx.contentResolver
         val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-        resolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it, null, bounds) }
-            ?: return false
+        // 注意：inJustDecodeBounds = true 时 decodeStream() 返回 null（只填 bounds 字段），
+        // 不能把它的返回值当作「流已打开」的判据，必须单独判断 openInputStream 是否为 null。
+        val boundsStream = resolver.openInputStream(uri) ?: return false
+        boundsStream.use { BitmapFactory.decodeStream(it, null, bounds) }
         if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return false
 
         var sample = 1
@@ -145,5 +148,18 @@ object AppAppearance {
             )
             .build()
         return ShortcutManagerCompat.requestPinShortcut(ctx, shortcut, pinCallback.intentSender)
+    }
+
+    /**
+     * 查询自定义快捷方式是否真的被固定在桌面。
+     *
+     * 不能仅用「收到 resultIntent」作为用户已确认的判据：部分桌面（如 Lawnchair）
+     * 在用户点「取消」时也会发送 resultIntent。唯一可靠的判据是查询已固定列表。
+     */
+    fun isCustomShortcutPinned(ctx: Context): Boolean = try {
+        val sm = ctx.getSystemService(ShortcutManager::class.java)
+        sm?.getPinnedShortcuts()?.any { it.id == CUSTOM_SHORTCUT_ID } == true
+    } catch (e: Exception) {
+        false
     }
 }

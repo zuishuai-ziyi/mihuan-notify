@@ -21,8 +21,8 @@ android {
         applicationId = "com.mihuan.notifyrelay"
         minSdk = 26
         targetSdk = 34
-        versionCode = 11
-        versionName = "2.6"
+        versionCode = 12
+        versionName = "2.7"
     }
 
     compileOptions {

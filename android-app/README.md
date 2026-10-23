@@ -11,6 +11,12 @@ gradle assembleDebug          # 或 gradle assembleRelease（keystore.properties
 # 产物：app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## v2.7 修复
+
+- 修复自定义图标选图后总是提示「图片读取失败」的问题（解码边界探测的返回值判据错误）。
+- 修复点「取消」也被当作添加成功：部分桌面在用户拒绝固定快捷方式时仍会发送回调，现改为用 `getPinnedShortcuts()` 核实是否真的固定；未固定则保持原外观。
+- 确认添加后立即隐藏原图标（不再需要重启应用）。
+
 ## v2.6 修复
 
 - 修复 v2.5 打开即崩溃的问题（启动时对外观方案的空 alias 调用组件启用接口抛异常）。

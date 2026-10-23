@@ -348,9 +348,18 @@ class MainActivity : ComponentActivity() {
         onCustomPinResult = {
             if (customPending) {
                 customPending = false
-                ConfigStore.setAppProfile(ctx, AppAppearance.CUSTOM)
-                appProfile = AppAppearance.CUSTOM
-                Toast.makeText(ctx, "自定义图标已添加，原启动图标已隐藏", Toast.LENGTH_LONG).show()
+                // 注意：部分桌面（如 Lawnchair）即使用户点「取消」也会发送回调，
+                // 因此必须查询已固定列表才能确认真的添加成功。
+                if (AppAppearance.isCustomShortcutPinned(ctx)) {
+                    ConfigStore.setAppProfile(ctx, AppAppearance.CUSTOM)
+                    // 必须立即收敛 alias，否则要等下次启动才会隐藏内置图标（toast 与实际不符）
+                    AppAppearance.apply(ctx, AppAppearance.CUSTOM)
+                    appProfile = AppAppearance.CUSTOM
+                    Toast.makeText(ctx, "自定义图标已添加，原启动图标已隐藏", Toast.LENGTH_LONG).show()
+                } else {
+                    appProfile = ConfigStore.appProfile(ctx)
+                    Toast.makeText(ctx, "未添加到桌面，已保持原外观", Toast.LENGTH_SHORT).show()
+                }
             }
         }
 
