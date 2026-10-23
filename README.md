@@ -1,3 +1,4 @@
+（本项目使用 GLM 5.3, DeepSeek-V4 等模型构建）
 # 跨设备通知转发系统（PC WebHook → 手机 → 小米手环）
 
 [![CI](https://github.com/zuishuai-ziyi/mihuan-notify/actions/workflows/ci.yml/badge.svg)](https://github.com/zuishuai-ziyi/mihuan-notify/actions/workflows/ci.yml)
