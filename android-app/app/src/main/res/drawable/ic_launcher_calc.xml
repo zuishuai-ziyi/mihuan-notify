@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 启动图标（计算器外观方案）：石墨底白计算器 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <path
+        android:fillColor="#455A64"
+        android:pathData="M24,2C11.85,2 2,11.85 2,24s9.85,22 22,22 22,-9.85 22,-22S36.15,2 24,2z" />
+    <!-- 机身 -->
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M15,10h18c1.1,0 2,0.9 2,2v24c0,1.1 -0.9,2 -2,2H15c-1.1,0 -2,-0.9 -2,-2V12C13,10.9 13.9,10 15,10z" />
+    <!-- 屏幕 -->
+    <path
+        android:fillColor="#455A64"
+        android:pathData="M16.5,13h15v6h-15z" />
+    <!-- 按键 3x3 -->
+    <path
+        android:fillColor="#455A64"
+        android:pathData="M16.5,22h3.5v3h-3.5z M22.5,22h3.5v3h-3.5z M28.5,22h3.5v3h-3.5z M16.5,28h3.5v3h-3.5z M22.5,28h3.5v3h-3.5z M28.5,28h3.5v3h-3.5z M16.5,34h3.5v3h-3.5z M22.5,34h3.5v3h-3.5z M28.5,34h3.5v3h-3.5z" />
+</vector>

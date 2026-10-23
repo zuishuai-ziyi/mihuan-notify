@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 品牌绿色系，深色模式（跟随系统） -->
-    <color name="brand_primary">#9BD49A</color>
-    <color name="brand_on_primary">#00390F</color>
-    <color name="brand_primary_container">#1C5124</color>
-    <color name="brand_on_primary_container">#B7F1B6</color>
-    <color name="brand_secondary_container">#394B38</color>
-    <color name="brand_on_secondary_container">#D5E8CF</color>
-    <color name="brand_surface">#10140F</color>
-    <color name="brand_on_surface">#DFE4DB</color>
-    <color name="brand_on_surface_variant">#C1C9BE</color>
-    <color name="brand_outline">#8C9285</color>
+    <!-- 清新淡蓝色系，深色模式（跟随系统，与 Theme.kt 保持一致） -->
+    <color name="brand_primary">#9FC6F0</color>
+    <color name="brand_on_primary">#00315B</color>
+    <color name="brand_primary_container">#1D4A78</color>
+    <color name="brand_on_primary_container">#D4E3FB</color>
+    <color name="brand_secondary_container">#35465D</color>
+    <color name="brand_on_secondary_container">#DCE7F7</color>
+    <color name="brand_surface">#101418</color>
+    <color name="brand_on_surface">#DFE3EA</color>
+    <color name="brand_on_surface_variant">#C3C6CF</color>
+    <color name="brand_outline">#8D9199</color>
 
-    <!-- 状态与提示 -->
+    <!-- 状态与提示（语义色） -->
     <color name="status_ok">#81C784</color>
     <color name="status_bad">#EF9A9A</color>
     <color name="warn_container">#4A3200</color>

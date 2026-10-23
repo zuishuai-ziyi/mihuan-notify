@@ -71,7 +71,8 @@ import java.net.NetworkInterface
 
 /**
  * 主界面（Jetpack Compose 实现）：状态卡（运行状态 + 连接信息 + 启停/测试/复制）、
- * 传输模式配置、应用行为设置（开机自启 / 最近任务隐藏 / 日志保留条数）、运行日志。
+ * 传输模式配置、应用行为设置（开机自启 / 最近任务隐藏 / 日志保留条数）、
+ * 应用外观与通知（桌面名称图标方案 / 常驻通知标题正文）、运行日志。
  */
 class MainActivity : ComponentActivity() {
 
@@ -260,6 +261,10 @@ class MainActivity : ComponentActivity() {
         var bootStart by remember { mutableStateOf(ConfigStore.bootStart(ctx)) }
         var hideRecents by remember { mutableStateOf(ConfigStore.hideRecents(ctx)) }
         var logLimit by remember { mutableIntStateOf(ConfigStore.logLimit(ctx)) }
+        // 应用外观与通知
+        var appProfile by remember { mutableStateOf(ConfigStore.appProfile(ctx)) }
+        var notifTitle by remember { mutableStateOf(ConfigStore.notifTitle(ctx)) }
+        var notifText by remember { mutableStateOf(ConfigStore.notifText(ctx)) }
 
         val modeDirty = pendingMode != null
         val displayMode = pendingMode ?: savedMode
@@ -526,6 +531,106 @@ class MainActivity : ComponentActivity() {
                                 modifier = Modifier.weight(1f)
                             ) { Text("$v") }
                         }
+                    }
+                }
+            }
+
+            // ===== 应用外观与通知 =====
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "应用外观与通知",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "桌面名称与图标",
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "切换后桌面图标与名称随之更新；系统「应用信息」页仍显示默认名称，部分桌面需稍候刷新",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        AppAppearance.PROFILES.forEachIndexed { i, p ->
+                            SegmentedButton(
+                                selected = appProfile == p.key,
+                                onClick = {
+                                    if (appProfile != p.key) {
+                                        appProfile = p.key
+                                        ConfigStore.setAppProfile(ctx, p.key)
+                                        AppAppearance.apply(ctx, p.key)
+                                        Toast.makeText(
+                                            ctx,
+                                            "已切换为「${p.label}」，桌面图标与名称稍后刷新",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+                                    }
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(
+                                    index = i,
+                                    count = AppAppearance.PROFILES.size
+                                ),
+                                modifier = Modifier.weight(1f)
+                            ) { Text(p.short) }
+                        }
+                    }
+
+                    Text(
+                        text = "常驻通知内容",
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "前台服务常驻通知的标题与正文，留空使用默认；仅显示在本机通知栏，不会转发到手环",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    OutlinedTextField(
+                        value = notifTitle,
+                        onValueChange = { notifTitle = it },
+                        label = { Text("通知标题") },
+                        placeholder = { Text("通知转发服务运行中") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    OutlinedTextField(
+                        value = notifText,
+                        onValueChange = { notifText = it },
+                        label = { Text("通知正文") },
+                        placeholder = { Text("监听 0.0.0.0:${ConfigStore.port(ctx)}，等待 PC 推送") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        FilledTonalButton(onClick = {
+                            ConfigStore.setNotifTitle(ctx, notifTitle)
+                            ConfigStore.setNotifText(ctx, notifText)
+                            ctx.startService(
+                                Intent(ctx, RelayService::class.java)
+                                    .setAction(RelayService.ACTION_REFRESH_NOTIF)
+                            )
+                            Toast.makeText(ctx, "常驻通知内容已应用", Toast.LENGTH_SHORT).show()
+                        }) { Text("应用通知内容") }
+                        TextButton(onClick = {
+                            notifTitle = ""
+                            notifText = ""
+                            ConfigStore.setNotifTitle(ctx, "")
+                            ConfigStore.setNotifText(ctx, "")
+                            ctx.startService(
+                                Intent(ctx, RelayService::class.java)
+                                    .setAction(RelayService.ACTION_REFRESH_NOTIF)
+                            )
+                            Toast.makeText(ctx, "已恢复默认常驻通知", Toast.LENGTH_SHORT).show()
+                        }) { Text("恢复默认") }
                     }
                 }
             }

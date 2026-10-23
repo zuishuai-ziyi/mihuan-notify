@@ -12,6 +12,9 @@ object ConfigStore {
     private const val KEY_BOOT_START = "boot_start"
     private const val KEY_HIDE_RECENTS = "hide_recents"
     private const val KEY_LOG_LIMIT = "log_limit"
+    private const val KEY_APP_PROFILE = "app_profile"
+    private const val KEY_NOTIF_TITLE = "notif_title"
+    private const val KEY_NOTIF_TEXT = "notif_text"
     private const val KEY_MODE = "mode"
     private const val KEY_RELAY_URL = "relay_url"
     private const val KEY_RELAY_CHANNEL = "relay_channel_id"
@@ -110,5 +113,27 @@ object ConfigStore {
 
     fun setLogLimit(ctx: Context, value: Int) {
         prefs(ctx).edit().putInt(KEY_LOG_LIMIT, value).apply()
+    }
+
+    /** 应用外观方案（桌面名称+图标组合，见 AppAppearance.PROFILES），默认「通知转发」。 */
+    fun appProfile(ctx: Context): String =
+        prefs(ctx).getString(KEY_APP_PROFILE, null) ?: AppAppearance.DEFAULT
+
+    fun setAppProfile(ctx: Context, value: String) {
+        prefs(ctx).edit().putString(KEY_APP_PROFILE, value).apply()
+    }
+
+    /** 常驻通知标题（空串 = 使用内置默认「通知转发服务运行中」）。 */
+    fun notifTitle(ctx: Context): String = prefs(ctx).getString(KEY_NOTIF_TITLE, "")!!
+
+    fun setNotifTitle(ctx: Context, value: String) {
+        prefs(ctx).edit().putString(KEY_NOTIF_TITLE, value.trim()).apply()
+    }
+
+    /** 常驻通知正文（空串 = 使用内置默认，含动态端口）。 */
+    fun notifText(ctx: Context): String = prefs(ctx).getString(KEY_NOTIF_TEXT, "")!!
+
+    fun setNotifText(ctx: Context, value: String) {
+        prefs(ctx).edit().putString(KEY_NOTIF_TEXT, value.trim()).apply()
     }
 }

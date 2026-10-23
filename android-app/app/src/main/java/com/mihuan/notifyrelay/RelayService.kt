@@ -35,6 +35,15 @@ class RelayService : Service() {
                 sendTestNotification()
                 return START_STICKY
             }
+            ACTION_REFRESH_NOTIF -> {
+                // 常驻通知内容变更：服务运行中则重建前台通知，否则下次启动时自然生效
+                if (running) {
+                    NotificationHelper.ensureChannels(this)
+                    startForeground(NOTIF_ID, NotificationHelper.serviceNotification(this))
+                    log("常驻通知内容已更新")
+                }
+                return START_STICKY
+            }
         }
 
         NotificationHelper.ensureChannels(this)
@@ -135,6 +144,7 @@ class RelayService : Service() {
         const val ACTION_START = "com.mihuan.notifyrelay.action.START"
         const val ACTION_STOP = "com.mihuan.notifyrelay.action.STOP"
         const val ACTION_TEST = "com.mihuan.notifyrelay.action.TEST"
+        const val ACTION_REFRESH_NOTIF = "com.mihuan.notifyrelay.action.REFRESH_NOTIF"
         private const val NOTIF_ID = 1
 
         @Volatile

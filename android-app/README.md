@@ -11,6 +11,12 @@ gradle assembleDebug          # 或 gradle assembleRelease（keystore.properties
 # 产物：app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## v2.4 新增
+
+- **清新淡蓝色界面**：应用主题与 Compose 配色整体换为淡蓝色系（与新版启动图标同源），深色模式跟随系统；语义状态色不变。
+- **应用外观自定义**（「应用外观与通知」卡）：桌面名称与图标 4 选 1——默认「通知转发」/「记事本」/「计算器」/「天气」（activity-alias 方案，选择持久化；系统「应用信息」页仍显示默认名）。
+- **常驻通知内容自定义**：前台服务通知的标题与正文可自定义（留空用默认），应用后立即生效；仍为静默 + localOnly，不转发到手环。
+
 ## v2.3 新增
 
 - **Jetpack Compose 现代化界面**：主界面由 XML View 全面迁移到 **Jetpack Compose + Material 3** 声明式 UI——状态卡 / 传输模式卡（M3 分段按钮）/ 应用行为卡 / 运行日志卡；绿色品牌配色（与启动图标同源），深色模式跟随系统；可长按选中复制连接信息与日志。

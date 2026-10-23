@@ -1,18 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- 品牌绿色系（与启动图标 #2E7D32 呼应），浅色模式 -->
-    <color name="brand_primary">#356A3D</color>
+    <!-- 清新淡蓝色系，浅色模式（与 Theme.kt 保持一致） -->
+    <color name="brand_primary">#3D7EBB</color>
     <color name="brand_on_primary">#FFFFFF</color>
-    <color name="brand_primary_container">#B7F1B6</color>
-    <color name="brand_on_primary_container">#002204</color>
-    <color name="brand_secondary_container">#D5E8CF</color>
-    <color name="brand_on_secondary_container">#101F10</color>
-    <color name="brand_surface">#F7FBF2</color>
-    <color name="brand_on_surface">#191D17</color>
-    <color name="brand_on_surface_variant">#414940</color>
-    <color name="brand_outline">#72796F</color>
+    <color name="brand_primary_container">#D4E3FB</color>
+    <color name="brand_on_primary_container">#0B2749</color>
+    <color name="brand_secondary_container">#DCE7F7</color>
+    <color name="brand_on_secondary_container">#121C2B</color>
+    <color name="brand_surface">#F6FAFF</color>
+    <color name="brand_on_surface">#191C20</color>
+    <color name="brand_on_surface_variant">#43474E</color>
+    <color name="brand_outline">#73777F</color>
 
-    <!-- 状态与提示 -->
+    <!-- 状态与提示（语义色：成功/失败/警示，不随主题换色） -->
     <color name="status_ok">#2E7D32</color>
     <color name="status_bad">#C62828</color>
     <color name="warn_container">#FFEDD9</color>
