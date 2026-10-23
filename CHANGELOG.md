@@ -5,6 +5,18 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## v2.3.0（未发布）
+
+### 变更
+- Android：`versionCode` 7 → 8，`versionName` 2.2 → 2.3；PC / 中继服务器版本不变。
+
+### 新增（Android）
+- **界面现代化（Jetpack Compose）**：主界面从 XML View 体系全面迁移到 **Jetpack Compose + Material 3** 声明式 UI（BOM 2024.09.03，Compose Compiler 1.5.14，配套 Kotlin 1.9.24）——状态卡（运行状态彩点 + 模式胶囊 + 可选中连接信息 + 启停/测试/复制/Token 操作）、传输模式卡（**M3 SegmentedButton** 分段选择，中继三要素/监听端口仅在对应模式显示）、应用行为卡（开关 + 分段选择）、运行日志卡；保留与启动图标同源的绿色品牌配色，**深色模式跟随系统**；原 `activity_main.xml` 及配套 drawable 已移除。
+- **应用行为自定义**（设置持久化，即时生效）：
+  - **开机自启**开关（默认开）：总开关；实际拉起还需停机前服务在运行（手动「停止服务」后重启不自启，与旧版语义一致）。
+  - **在最近任务中隐藏**开关（默认开，与 v1.2 以来行为一致）：Manifest 硬编码 `excludeFromRecents` 改为运行时 `ActivityManager.AppTask.setExcludeFromRecents`，切开关立即生效。
+  - **日志保留条数**：40 / 100 / 200 / 500 四档分段选择（默认 40，与旧版一致），新增「清空」日志按钮。
+
 ## v2.2.4（2026-10-23）
 
 ### 变更

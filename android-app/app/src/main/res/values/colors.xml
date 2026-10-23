@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 品牌绿色系（与启动图标 #2E7D32 呼应），浅色模式 -->
+    <color name="brand_primary">#356A3D</color>
+    <color name="brand_on_primary">#FFFFFF</color>
+    <color name="brand_primary_container">#B7F1B6</color>
+    <color name="brand_on_primary_container">#002204</color>
+    <color name="brand_secondary_container">#D5E8CF</color>
+    <color name="brand_on_secondary_container">#101F10</color>
+    <color name="brand_surface">#F7FBF2</color>
+    <color name="brand_on_surface">#191D17</color>
+    <color name="brand_on_surface_variant">#414940</color>
+    <color name="brand_outline">#72796F</color>
+
+    <!-- 状态与提示 -->
+    <color name="status_ok">#2E7D32</color>
+    <color name="status_bad">#C62828</color>
+    <color name="warn_container">#FFEDD9</color>
+    <color name="warn_on_container">#5C3A00</color>
+    <color name="white">#FFFFFF</color>
+</resources>

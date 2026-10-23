@@ -11,6 +11,8 @@ import android.content.Intent
 class BootReceiver : BroadcastReceiver() {
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
+        // 双重条件：用户设置的总开关 + 停机前服务在运行（手动停过则不自启）
+        if (!ConfigStore.bootStart(context)) return
         if (!ConfigStore.autoStart(context)) return
         context.startForegroundService(
             Intent(context, RelayService::class.java).setAction(RelayService.ACTION_START)

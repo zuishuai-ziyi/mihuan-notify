@@ -21,8 +21,8 @@ android {
         applicationId = "com.mihuan.notifyrelay"
         minSdk = 26
         targetSdk = 34
-        versionCode = 7
-        versionName = "2.2"
+        versionCode = 8
+        versionName = "2.3"
     }
 
     compileOptions {
@@ -31,6 +31,14 @@ android {
     }
     kotlinOptions {
         jvmTarget = "17"
+    }
+    // Jetpack Compose（现代声明式 UI 工具包）
+    buildFeatures {
+        compose = true
+    }
+    composeOptions {
+        // Compose Compiler 与 Kotlin 1.9.24 的对应版本
+        kotlinCompilerExtensionVersion = "1.5.14"
     }
     signingConfigs {
         if (keystoreProps.isNotEmpty()) {
@@ -59,4 +67,14 @@ dependencies {
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    // Material XML 组件库：仅用于 Activity XML 主题 Theme.Relay（状态栏颜色等），UI 本体已迁移 Compose
+    implementation("com.google.android.material:material:1.12.0")
+
+    // ===== Jetpack Compose（BOM 统一管理版本，material3 1.3.0 / ui 1.7.x）=====
+    implementation(platform("androidx.compose:compose-bom:2024.09.03"))
+    implementation("androidx.activity:activity-compose:1.9.2")
+    implementation("androidx.compose.ui:ui")
+    implementation("androidx.compose.ui:ui-tooling-preview")
+    implementation("androidx.compose.material3:material3")
+    debugImplementation("androidx.compose.ui:ui-tooling")
 }

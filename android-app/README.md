@@ -11,6 +11,14 @@ gradle assembleDebug          # 或 gradle assembleRelease（keystore.properties
 # 产物：app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## v2.3 新增
+
+- **Jetpack Compose 现代化界面**：主界面由 XML View 全面迁移到 **Jetpack Compose + Material 3** 声明式 UI——状态卡 / 传输模式卡（M3 分段按钮）/ 应用行为卡 / 运行日志卡；绿色品牌配色（与启动图标同源），深色模式跟随系统；可长按选中复制连接信息与日志。
+- **应用行为自定义**（持久化，即时生效）：
+  - **开机自启**开关（默认开，总开关；实际拉起还需停机前服务在运行）；
+  - **在最近任务中隐藏**开关（默认开，与旧版 Manifest `excludeFromRecents` 行为一致，改为运行时控制）；
+  - **日志保留条数** 40/100/200/500 四档 + 「清空」日志按钮。
+
 ## v2.2 新增
 
 - **传输模式开关**：主界面新增「传输模式」单选（**直连**（局域网，默认）/ **中继服务器**），切换后自动重启服务。

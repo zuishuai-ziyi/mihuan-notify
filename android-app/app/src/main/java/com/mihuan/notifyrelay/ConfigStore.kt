@@ -9,6 +9,9 @@ object ConfigStore {
     private const val KEY_TOKEN = "token"
     private const val KEY_PORT = "port"
     private const val KEY_AUTO_START = "auto_start"
+    private const val KEY_BOOT_START = "boot_start"
+    private const val KEY_HIDE_RECENTS = "hide_recents"
+    private const val KEY_LOG_LIMIT = "log_limit"
     private const val KEY_MODE = "mode"
     private const val KEY_RELAY_URL = "relay_url"
     private const val KEY_RELAY_CHANNEL = "relay_channel_id"
@@ -78,5 +81,34 @@ object ConfigStore {
 
     fun setAutoStart(ctx: Context, value: Boolean) {
         prefs(ctx).edit().putBoolean(KEY_AUTO_START, value).apply()
+    }
+
+    /**
+     * 开机自启总开关（用户设置项，默认开）：关掉后无论服务是否在运行，重启手机都不拉起。
+     * BootReceiver 实际拉起需同时满足：本开关开 && autoStart（停机前服务在运行）。
+     */
+    fun bootStart(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_BOOT_START, true)
+
+    fun setBootStart(ctx: Context, value: Boolean) {
+        prefs(ctx).edit().putBoolean(KEY_BOOT_START, value).apply()
+    }
+
+    /** 在最近任务中隐藏主界面（默认开，与旧版 excludeFromRecents 行为一致）；运行时经 AppTask.setExcludeFromRecents 生效。 */
+    fun hideRecents(ctx: Context): Boolean = prefs(ctx).getBoolean(KEY_HIDE_RECENTS, true)
+
+    fun setHideRecents(ctx: Context, value: Boolean) {
+        prefs(ctx).edit().putBoolean(KEY_HIDE_RECENTS, value).apply()
+    }
+
+    /** 运行日志保留条数（主界面显示上限），可选值见 LOG_LIMITS，默认 40（与旧版一致）。 */
+    val LOG_LIMITS = intArrayOf(40, 100, 200, 500)
+
+    fun logLimit(ctx: Context): Int {
+        val v = prefs(ctx).getInt(KEY_LOG_LIMIT, 40)
+        return if (LOG_LIMITS.contains(v)) v else 40
+    }
+
+    fun setLogLimit(ctx: Context, value: Int) {
+        prefs(ctx).edit().putInt(KEY_LOG_LIMIT, value).apply()
     }
 }

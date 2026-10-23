@@ -40,6 +40,7 @@ class RelayService : Service() {
         NotificationHelper.ensureChannels(this)
         startForeground(NOTIF_ID, NotificationHelper.serviceNotification(this))
 
+        applyLogLimit(ConfigStore.logLimit(this))
         startEngine()
         running = true
         ConfigStore.setAutoStart(this, true) // 运行中关机/重启后自动拉起
@@ -140,17 +141,37 @@ class RelayService : Service() {
         var running: Boolean = false
             private set
 
-        /** 运行日志（主界面轮询读取；写入来自引擎线程，需加锁）。 */
+        /** 运行日志（主界面轮询读取；写入来自引擎线程，需加锁）。保留条数由设置「日志保留条数」控制。 */
         private val logs = ArrayDeque<String>()
+
+        /** 当前日志保留上限；由服务启动/界面修改时同步（默认 40 与旧版一致）。 */
+        @Volatile
+        private var logLimit: Int = 40
+
+        /** 界面/服务启动时同步日志保留上限，并立即裁剪现有日志。 */
+        @Synchronized
+        fun applyLogLimit(max: Int) {
+            logLimit = max.coerceIn(10, 1000)
+            trimLocked()
+        }
 
         @Synchronized
         fun log(line: String) {
             val ts = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
             logs.addLast("[$ts] $line")
-            while (logs.size > 40) logs.removeFirst()
+            trimLocked()
+        }
+
+        @Synchronized
+        fun clearLogs() {
+            logs.clear()
         }
 
         @Synchronized
         fun logSnapshot(): List<String> = logs.toList()
+
+        private fun trimLocked() {
+            while (logs.size > logLimit) logs.removeFirst()
+        }
     }
 }

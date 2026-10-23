@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 品牌绿色系，深色模式（跟随系统） -->
+    <color name="brand_primary">#9BD49A</color>
+    <color name="brand_on_primary">#00390F</color>
+    <color name="brand_primary_container">#1C5124</color>
+    <color name="brand_on_primary_container">#B7F1B6</color>
+    <color name="brand_secondary_container">#394B38</color>
+    <color name="brand_on_secondary_container">#D5E8CF</color>
+    <color name="brand_surface">#10140F</color>
+    <color name="brand_on_surface">#DFE4DB</color>
+    <color name="brand_on_surface_variant">#C1C9BE</color>
+    <color name="brand_outline">#8C9285</color>
+
+    <!-- 状态与提示 -->
+    <color name="status_ok">#81C784</color>
+    <color name="status_bad">#EF9A9A</color>
+    <color name="warn_container">#4A3200</color>
+    <color name="warn_on_container">#FFDDB8</color>
+</resources>

@@ -1,6 +1,7 @@
 package com.mihuan.notifyrelay
 
 import android.Manifest
+import android.app.ActivityManager
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -10,200 +11,165 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
-import android.widget.Button
-import android.widget.EditText
-import android.widget.LinearLayout
-import android.widget.RadioButton
-import android.widget.RadioGroup
-import android.widget.TextView
 import android.widget.Toast
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.setContent
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import kotlinx.coroutines.delay
 import java.net.Inet4Address
 import java.net.NetworkInterface
 
 /**
- * 主界面：显示连接信息（IP:port + token），启动/停止前台服务，发测试通知，查看日志。
+ * 主界面（Jetpack Compose 实现）：状态卡（运行状态 + 连接信息 + 启停/测试/复制）、
+ * 传输模式配置、应用行为设置（开机自启 / 最近任务隐藏 / 日志保留条数）、运行日志。
  */
-class MainActivity : AppCompatActivity() {
-
-    private lateinit var tvStatus: TextView
-    private lateinit var tvLogs: TextView
-    private lateinit var btnToggle: Button
-    private lateinit var rgMode: RadioGroup
-    private lateinit var llRelayConf: LinearLayout
-
-    /** 用户手动改过模式单选但尚未「保存并应用」——周期 render() 不得回写/回填，否则 1s 后被改回去。 */
-    private var modeDirty = false
-    private var syncingMode = false
-    /** 中继三要素仅首次 render 回填一次，避免边删边被填回。 */
-    private var relayPrefilled = false
+class MainActivity : ComponentActivity() {
 
     private val handler = Handler(Looper.getMainLooper())
-    private val poller = object : Runnable {
-        override fun run() {
-            render()
-            handler.postDelayed(this, 1000)
-        }
-    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
         NotificationHelper.ensureChannels(this)
         requestNotificationPermission()
 
-        tvStatus = findViewById(R.id.tv_status)
-        tvLogs = findViewById(R.id.tv_logs)
-        btnToggle = findViewById(R.id.btn_toggle)
-        rgMode = findViewById(R.id.rg_mode)
-        llRelayConf = findViewById(R.id.ll_relay_conf)
-
-        btnToggle.setOnClickListener { toggle() }
-        findViewById<Button>(R.id.btn_test).setOnClickListener {
-            startService(Intent(this, RelayService::class.java).setAction(RelayService.ACTION_TEST))
-            Toast.makeText(this, "已请求发送测试通知", Toast.LENGTH_SHORT).show()
-        }
-        findViewById<Button>(R.id.btn_token).setOnClickListener {
-            ConfigStore.regenerateToken(this)
-            Toast.makeText(this, "Token 已重新生成，请同步更新 PC 端设置页", Toast.LENGTH_LONG).show()
-            render()
-        }
-        findViewById<Button>(R.id.btn_copy).setOnClickListener { copyConfig() }
-
-        // 传输模式切换：直连 / 中继
-        val rbRelay = findViewById<RadioButton>(R.id.rb_relay)
-        val etRelayUrl = findViewById<EditText>(R.id.et_relay_url)
-        val etRelayChannel = findViewById<EditText>(R.id.et_relay_channel)
-        val etRelayPoll = findViewById<EditText>(R.id.et_relay_poll)
-
-        rgMode.setOnCheckedChangeListener { _, _ ->
-            llRelayConf.visibility = if (rbRelay.isChecked) android.view.View.VISIBLE else android.view.View.GONE
-            // 代码同步（render）不算用户操作，不置脏标记
-            if (!syncingMode) modeDirty = true
-        }
-        findViewById<Button>(R.id.btn_relay_apply).setOnClickListener {
-            val url = etRelayUrl.text.toString().trim()
-            val cid = etRelayChannel.text.toString().trim()
-            val ptok = etRelayPoll.text.toString().trim()
-            val relaySelected = rbRelay.isChecked
-            if (relaySelected && (url.isEmpty() || cid.isEmpty() || ptok.isEmpty())) {
-                Toast.makeText(this, "中继模式需填写地址、通道 ID 与 Poll Token", Toast.LENGTH_LONG).show()
-                return@setOnClickListener
-            }
-            val newMode = if (relaySelected) ConfigStore.MODE_RELAY else ConfigStore.MODE_DIRECT
-            val wasRunning = RelayService.running
-            if (wasRunning) startService(serviceIntent(RelayService.ACTION_STOP))
-            ConfigStore.setMode(this, newMode)
-            if (relaySelected) {
-                ConfigStore.setRelayUrl(this, url)
-                ConfigStore.setRelayChannelId(this, cid)
-                ConfigStore.setRelayPollToken(this, ptok)
-            }
-            modeDirty = false
-            relayPrefilled = true
-            Toast.makeText(this, "已切换为${if (newMode == ConfigStore.MODE_RELAY) "中继" else "直连"}模式", Toast.LENGTH_SHORT).show()
-            if (wasRunning || newMode == ConfigStore.MODE_RELAY) {
-                handler.postDelayed({
-                    ContextCompat.startForegroundService(this, serviceIntent())
-                }, 400)
-            }
-            handler.postDelayed({ render() }, 900)
-        }
-
-        // 端口修改：写入配置并重启服务使其生效
-        findViewById<Button>(R.id.btn_port).setOnClickListener {
-            val raw = findViewById<EditText>(R.id.et_port).text.toString().trim()
-            val p = raw.toIntOrNull()
-            if (p == null || p !in 1024..65535) {
-                Toast.makeText(this, "端口需为 1024-65535 的数字", Toast.LENGTH_SHORT).show()
-            } else if (p == ConfigStore.port(this)) {
-                Toast.makeText(this, "端口未变化", Toast.LENGTH_SHORT).show()
-            } else {
-                val wasRunning = RelayService.running
-                if (wasRunning) startService(serviceIntent(RelayService.ACTION_STOP))
-                ConfigStore.setPort(this, p)
-                Toast.makeText(this, "端口已改为 $p", Toast.LENGTH_SHORT).show()
-                if (wasRunning) {
-                    handler.postDelayed({
-                        ContextCompat.startForegroundService(this, serviceIntent())
-                    }, 400)
-                }
-                handler.postDelayed({ render() }, 900)
-            }
-        }
+        // 最近任务隐藏为运行时设置，进界面即按用户偏好应用
+        applyRecentsSetting()
 
         // 默认自动启动服务
         if (!RelayService.running) {
             ContextCompat.startForegroundService(this, serviceIntent())
         }
-        render()
+
+        setContent {
+            RelayTheme {
+                MainScreen()
+            }
+        }
     }
 
-    override fun onResume() {
-        super.onResume()
-        handler.post(poller)
-    }
+    // ---------- 非组合态动作（供 Composable 回调） ----------
 
-    override fun onPause() {
-        super.onPause()
-        handler.removeCallbacks(poller)
-    }
+    private fun hasNotifPerm(): Boolean = Build.VERSION.SDK_INT < 33 ||
+        checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
     private fun serviceIntent(action: String = RelayService.ACTION_START) =
         Intent(this, RelayService::class.java).setAction(action)
 
-    private fun toggle() {
+    private fun toggleService() {
         if (RelayService.running) {
             startService(serviceIntent(RelayService.ACTION_STOP))
         } else {
             ContextCompat.startForegroundService(this, serviceIntent())
         }
-        handler.postDelayed({ render() }, 300)
     }
 
-    private fun render() {
-        val state = if (RelayService.running) "● 运行中" else "○ 已停止"
-        // 通知权限被拒时给常驻提示条
-        val granted = Build.VERSION.SDK_INT < 33 ||
-            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
-        findViewById<TextView>(R.id.tv_perm).visibility = if (granted) android.view.View.GONE else android.view.View.VISIBLE
-        // 模式显示与表单回填（用户改过模式后不再回写，交给「保存并应用」）
-        val mode = ConfigStore.mode(this)
-        if (!modeDirty) {
-            val want = if (mode == ConfigStore.MODE_RELAY) R.id.rb_relay else R.id.rb_direct
-            if (rgMode.checkedRadioButtonId != want) {
-                syncingMode = true
-                rgMode.check(want)
-                syncingMode = false
-            }
-            llRelayConf.visibility = if (mode == ConfigStore.MODE_RELAY) android.view.View.VISIBLE else android.view.View.GONE
-        }
-        val etUrl = findViewById<EditText>(R.id.et_relay_url)
-        val etCh = findViewById<EditText>(R.id.et_relay_channel)
-        val etTok = findViewById<EditText>(R.id.et_relay_poll)
-        if (!relayPrefilled) {
-            if (ConfigStore.relayUrl(this).isNotEmpty()) etUrl.setText(ConfigStore.relayUrl(this))
-            if (ConfigStore.relayChannelId(this).isNotEmpty()) etCh.setText(ConfigStore.relayChannelId(this))
-            if (ConfigStore.relayPollToken(this).isNotEmpty()) etTok.setText(ConfigStore.relayPollToken(this))
-            relayPrefilled = true
-        }
+    private fun sendTestNotification() {
+        startService(Intent(this, RelayService::class.java).setAction(RelayService.ACTION_TEST))
+        Toast.makeText(this, "已请求发送测试通知", Toast.LENGTH_SHORT).show()
+    }
 
-        val ip = localIpv4() ?: "（无局域网 IP）"
-        tvStatus.text = buildString {
-            appendLine("状态：$state（${if (mode == ConfigStore.MODE_RELAY) "中继模式" else "直连模式"}）${if (modeDirty) " — 改动未生效，请点「保存并应用」" else ""}")
-            if (mode == ConfigStore.MODE_RELAY) {
-                appendLine("中继：${ConfigStore.relayUrl(this@MainActivity)}")
-                appendLine("通道：${ConfigStore.relayChannelId(this@MainActivity)}")
-            } else {
-                appendLine("监听地址：http://$ip:${ConfigStore.port(this@MainActivity)}")
-                appendLine("Token（需与 PC 端设置页 [手机端] 一致）：")
-                append(ConfigStore.token(this@MainActivity))
+    private fun regenerateToken() {
+        ConfigStore.regenerateToken(this)
+        Toast.makeText(this, "Token 已重新生成，请同步更新 PC 端设置页", Toast.LENGTH_LONG).show()
+    }
+
+    /** 400ms 后拉起服务（给 stop 一点时间，避免 start/stop 竞态）。 */
+    private fun restartServiceSoon() {
+        handler.postDelayed({
+            ContextCompat.startForegroundService(this, serviceIntent())
+        }, 400)
+    }
+
+    /** 保存并应用传输模式（含中继三要素）。返回 false 表示校验失败未应用。 */
+    private fun applyMode(relaySelected: Boolean, url: String, cid: String, ptok: String): Boolean {
+        if (relaySelected && (url.isEmpty() || cid.isEmpty() || ptok.isEmpty())) {
+            Toast.makeText(this, "中继模式需填写地址、通道 ID 与 Poll Token", Toast.LENGTH_LONG).show()
+            return false
+        }
+        val newMode = if (relaySelected) ConfigStore.MODE_RELAY else ConfigStore.MODE_DIRECT
+        val wasRunning = RelayService.running
+        if (wasRunning) startService(serviceIntent(RelayService.ACTION_STOP))
+        ConfigStore.setMode(this, newMode)
+        if (relaySelected) {
+            ConfigStore.setRelayUrl(this, url)
+            ConfigStore.setRelayChannelId(this, cid)
+            ConfigStore.setRelayPollToken(this, ptok)
+        }
+        Toast.makeText(
+            this,
+            "已切换为${if (relaySelected) "中继" else "直连"}模式",
+            Toast.LENGTH_SHORT
+        ).show()
+        if (wasRunning || relaySelected) restartServiceSoon()
+        return true
+    }
+
+    /** 端口修改：写入配置并重启服务使其生效。 */
+    private fun applyPort(raw: String) {
+        val p = raw.trim().toIntOrNull()
+        when {
+            p == null || p !in 1024..65535 ->
+                Toast.makeText(this, "端口需为 1024-65535 的数字", Toast.LENGTH_SHORT).show()
+            p == ConfigStore.port(this) ->
+                Toast.makeText(this, "端口未变化", Toast.LENGTH_SHORT).show()
+            else -> {
+                val wasRunning = RelayService.running
+                if (wasRunning) startService(serviceIntent(RelayService.ACTION_STOP))
+                ConfigStore.setPort(this, p)
+                Toast.makeText(this, "端口已改为 $p", Toast.LENGTH_SHORT).show()
+                if (wasRunning) restartServiceSoon()
             }
         }
-        btnToggle.text = if (RelayService.running) "停止服务" else "启动服务"
-        tvLogs.text = RelayService.logSnapshot().joinToString("\n")
     }
 
     /** 复制连接配置：直连模式=PC 端设置页 [手机端] 片段；中继模式=中继三要素。 */
@@ -237,6 +203,17 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    /** 按用户偏好把主界面任务在最近任务列表中隐藏/显示（部分 ROM 可能不支持，失败忽略）。 */
+    private fun applyRecentsSetting() {
+        try {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return
+            val hide = ConfigStore.hideRecents(this)
+            am.appTasks.forEach { it.setExcludeFromRecents(hide) }
+        } catch (e: Exception) {
+            // 个别 ROM 不支持运行时切换：保持默认行为即可
+        }
+    }
+
     /** 枚举网卡取局域网 IPv4（无需定位权限）。 */
     private fun localIpv4(): String? = try {
         NetworkInterface.getNetworkInterfaces().asSequence()
@@ -246,6 +223,375 @@ class MainActivity : AppCompatActivity() {
             ?.hostAddress
     } catch (e: Exception) {
         null
+    }
+
+    // ---------- Compose UI ----------
+
+    @Composable
+    fun MainScreen() {
+        val ctx = this
+        val statusColors = relayStatusColors()
+
+        // 周期刷新的服务侧状态（500ms，足够灵敏且开销极小）
+        var running by remember { mutableStateOf(RelayService.running) }
+        var permGranted by remember { mutableStateOf(hasNotifPerm()) }
+        var ip by remember { mutableStateOf<String?>(null) }
+        var logs by remember { mutableStateOf<List<String>>(emptyList()) }
+        var savedMode by remember { mutableStateOf(ConfigStore.mode(ctx)) }
+        // 用户改过模式但未「保存并应用」——非空期间 UI 显示 pendingMode，轮询不得回写
+        var pendingMode by remember { mutableStateOf<String?>(null) }
+
+        LaunchedEffect(Unit) {
+            while (true) {
+                running = RelayService.running
+                permGranted = hasNotifPerm()
+                ip = localIpv4()
+                logs = RelayService.logSnapshot()
+                savedMode = ConfigStore.mode(ctx)
+                delay(500)
+            }
+        }
+
+        // 本地表单状态（初值即持久化值，无需回填脏标记）
+        var relayUrl by remember { mutableStateOf(ConfigStore.relayUrl(ctx)) }
+        var relayChannel by remember { mutableStateOf(ConfigStore.relayChannelId(ctx)) }
+        var relayPoll by remember { mutableStateOf(ConfigStore.relayPollToken(ctx)) }
+        var portText by remember { mutableStateOf(ConfigStore.port(ctx).toString()) }
+        var bootStart by remember { mutableStateOf(ConfigStore.bootStart(ctx)) }
+        var hideRecents by remember { mutableStateOf(ConfigStore.hideRecents(ctx)) }
+        var logLimit by remember { mutableIntStateOf(ConfigStore.logLimit(ctx)) }
+
+        val modeDirty = pendingMode != null
+        val displayMode = pendingMode ?: savedMode
+
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            // ===== 状态卡 =====
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer
+                )
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(
+                            modifier = Modifier
+                                .size(10.dp)
+                                .clip(CircleShape)
+                                .background(if (running) statusColors.ok else statusColors.bad)
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = if (running) "服务运行中" else "服务已停止",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = MaterialTheme.colorScheme.secondaryContainer
+                        ) {
+                            Text(
+                                text = if (savedMode == ConfigStore.MODE_RELAY) "中继模式" else "直连模式",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp)
+                            )
+                        }
+                    }
+
+                    SelectionContainer {
+                        Text(
+                            text = buildString {
+                                if (savedMode == ConfigStore.MODE_RELAY) {
+                                    appendLine("中继：${ConfigStore.relayUrl(ctx)}")
+                                    append("通道：${ConfigStore.relayChannelId(ctx)}")
+                                } else {
+                                    appendLine("监听地址：http://${ip ?: "（无局域网 IP）"}:${ConfigStore.port(ctx)}")
+                                    append("Token：${ConfigStore.token(ctx)}")
+                                }
+                            } + if (modeDirty) "\n⚠ 改动未生效：请点「保存并应用」" else "",
+                            fontSize = 13.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                    }
+
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            onClick = { toggleService() },
+                            modifier = Modifier.weight(1f)
+                        ) { Text(if (running) "停止服务" else "启动服务") }
+                        OutlinedButton(
+                            onClick = { sendTestNotification() },
+                            modifier = Modifier.weight(1f)
+                        ) { Text("测试通知") }
+                    }
+                    Row {
+                        TextButton(onClick = { copyConfig() }) {
+                            Text("复制配置信息", fontSize = 13.sp)
+                        }
+                        TextButton(onClick = { regenerateToken() }) {
+                            Text("重新生成 Token", fontSize = 13.sp)
+                        }
+                    }
+                }
+            }
+
+            // ===== 通知权限提示 =====
+            if (!permGranted) {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = statusColors.warnContainer
+                    )
+                ) {
+                    Text(
+                        text = "⚠ 未授予通知权限，收到消息也无法展示。请点「启动服务」后在系统弹窗中允许，或到系统设置里开启。",
+                        fontSize = 12.sp,
+                        color = statusColors.onWarnContainer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(12.dp)
+                    )
+                }
+            }
+
+            // ===== 传输模式 =====
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Text(
+                        text = "传输模式",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        SegmentedButton(
+                            selected = displayMode == ConfigStore.MODE_DIRECT,
+                            onClick = { pendingMode = ConfigStore.MODE_DIRECT },
+                            shape = SegmentedButtonDefaults.itemShape(index = 0, count = 2),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("直连（局域网）") }
+                        SegmentedButton(
+                            selected = displayMode == ConfigStore.MODE_RELAY,
+                            onClick = { pendingMode = ConfigStore.MODE_RELAY },
+                            shape = SegmentedButtonDefaults.itemShape(index = 1, count = 2),
+                            modifier = Modifier.weight(1f)
+                        ) { Text("经中继服务器") }
+                    }
+
+                    if (displayMode == ConfigStore.MODE_RELAY) {
+                        OutlinedTextField(
+                            value = relayUrl,
+                            onValueChange = { relayUrl = it },
+                            label = { Text("中继服务地址") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = relayChannel,
+                            onValueChange = { relayChannel = it },
+                            label = { Text("通道 ID") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        OutlinedTextField(
+                            value = relayPoll,
+                            onValueChange = { relayPoll = it },
+                            label = { Text("Poll Token") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    } else {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = portText,
+                                onValueChange = { portText = it },
+                                label = { Text("监听端口") },
+                                singleLine = true,
+                                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedButton(onClick = { applyPort(portText) }) { Text("应用") }
+                        }
+                    }
+
+                    FilledTonalButton(
+                        onClick = {
+                            if (applyMode(
+                                    displayMode == ConfigStore.MODE_RELAY,
+                                    relayUrl.trim(), relayChannel.trim(), relayPoll.trim()
+                                )
+                            ) {
+                                pendingMode = null
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth()
+                    ) { Text("保存并应用（重启服务）") }
+                }
+            }
+
+            // ===== 应用行为 =====
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = "应用行为",
+                        fontSize = 16.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    SettingRow(
+                        title = "开机自启",
+                        desc = "重启手机后自动恢复转发（需停机前服务在运行）",
+                        checked = bootStart,
+                        onChange = { checked ->
+                            bootStart = checked
+                            ConfigStore.setBootStart(ctx, checked)
+                            Toast.makeText(
+                                ctx,
+                                if (checked) "开机自启已开启（需停机前服务在运行）" else "开机自启已关闭",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    )
+                    SettingRow(
+                        title = "在最近任务中隐藏",
+                        desc = "主界面不出现在系统最近任务列表，后台转发不受影响",
+                        checked = hideRecents,
+                        onChange = { checked ->
+                            hideRecents = checked
+                            ConfigStore.setHideRecents(ctx, checked)
+                            applyRecentsSetting()
+                            Toast.makeText(
+                                ctx,
+                                if (checked) "已隐藏：主界面不出现在最近任务列表" else "已显示：主界面出现在最近任务列表",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    )
+                    Spacer(Modifier.size(4.dp))
+                    Text(
+                        text = "日志保留条数",
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "主界面「运行日志」最多保留的行数，超出自动清理，立即生效",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                        val limits = listOf(40, 100, 200, 500)
+                        limits.forEachIndexed { i, v ->
+                            SegmentedButton(
+                                selected = logLimit == v,
+                                onClick = {
+                                    if (v != ConfigStore.logLimit(ctx)) {
+                                        logLimit = v
+                                        ConfigStore.setLogLimit(ctx, v)
+                                        RelayService.applyLogLimit(v)
+                                        Toast.makeText(ctx, "日志保留条数：$v", Toast.LENGTH_SHORT).show()
+                                    }
+                                },
+                                shape = SegmentedButtonDefaults.itemShape(index = i, count = limits.size),
+                                modifier = Modifier.weight(1f)
+                            ) { Text("$v") }
+                        }
+                    }
+                }
+            }
+
+            // ===== 运行日志 =====
+            OutlinedCard(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(20.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "运行日志",
+                            fontSize = 16.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            modifier = Modifier.weight(1f)
+                        )
+                        TextButton(onClick = {
+                            RelayService.clearLogs()
+                            logs = RelayService.logSnapshot()
+                        }) { Text("清空") }
+                    }
+                    SelectionContainer {
+                        Text(
+                            text = logs.joinToString("\n").ifEmpty { "（暂无日志）" },
+                            fontSize = 12.sp,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @Composable
+    private fun SettingRow(
+        title: String,
+        desc: String,
+        checked: Boolean,
+        onChange: (Boolean) -> Unit
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .clickable { onChange(!checked) }
+                .padding(vertical = 6.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(Modifier.weight(1f)) {
+                Text(text = title, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
+                Text(
+                    text = desc,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Switch(checked = checked, onCheckedChange = onChange)
+        }
     }
 
     companion object {
