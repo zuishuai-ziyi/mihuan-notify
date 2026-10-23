@@ -5,6 +5,12 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## v2.2.4（2026-10-23）
+
+### 变更
+- Android：`versionCode` 6 → 7，Release APK 由 CI 使用正式签名证书构建（GitHub Actions secrets：`ANDROID_KEYSTORE_BASE64` + `ANDROID_KEYSTORE_PROPERTIES`），此前公开发布的 Release APK 均为 debug 签名；正式签名包与旧 debug 包不兼容升级，需卸载重装（Token 会重置）。
+- PC / 中继服务器版本不变（pc-relay 2.2.3 / relay-server 1.0.1），Release 产物以 tag `v2.2.4` 命名。
+
 ## 未发布（Unreleased）
 
 ### 新增
