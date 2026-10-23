@@ -2,10 +2,13 @@ package com.mihuan.notifyrelay
 
 import android.Manifest
 import android.app.ActivityManager
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
@@ -13,7 +16,10 @@ import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -58,13 +64,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.pm.ShortcutManagerCompat
 import kotlinx.coroutines.delay
 import java.net.Inet4Address
 import java.net.NetworkInterface
@@ -78,10 +87,30 @@ class MainActivity : ComponentActivity() {
 
     private val handler = Handler(Looper.getMainLooper())
 
+    /** 桌面固定快捷方式的结果回调（供 Compose 界面更新状态）。收到回调即代表用户已确认固定。 */
+    private var onCustomPinResult: ((Boolean) -> Unit)? = null
+
+    private val pinResultReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            // 平台语义：用户在桌面弹窗中确认固定后才会发送回调，取消则无回调
+            onCustomPinResult?.invoke(true)
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NotificationHelper.ensureChannels(this)
+
+        // 自定义图标：监听桌面「固定快捷方式」确认结果（确认后才隐藏内置启动 alias）
+        ContextCompat.registerReceiver(
+            this, pinResultReceiver,
+            IntentFilter(ACTION_CUSTOM_PIN_RESULT),
+            ContextCompat.RECEIVER_NOT_EXPORTED
+        )
         requestNotificationPermission()
+
+        // 按保存的方案收敛桌面 alias 启用状态（修复旧版本「切换外观后新旧图标并存」的问题）
+        AppAppearance.apply(this, ConfigStore.appProfile(this))
 
         // 最近任务隐藏为运行时设置，进界面即按用户偏好应用
         applyRecentsSetting()
@@ -95,6 +124,15 @@ class MainActivity : ComponentActivity() {
             RelayTheme {
                 MainScreen()
             }
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        try {
+            unregisterReceiver(pinResultReceiver)
+        } catch (e: Exception) {
+            // 未注册时忽略（理论上 onCreate 必然已注册）
         }
     }
 
@@ -122,6 +160,33 @@ class MainActivity : ComponentActivity() {
     private fun regenerateToken() {
         ConfigStore.regenerateToken(this)
         Toast.makeText(this, "Token 已重新生成，请同步更新 PC 端设置页", Toast.LENGTH_LONG).show()
+    }
+
+    private fun customPinCallback(): PendingIntent = PendingIntent.getBroadcast(
+        this, 0,
+        Intent(ACTION_CUSTOM_PIN_RESULT).setPackage(packageName),
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+
+    /** 生成自定义桌面图标：请求固定快捷方式；用户在桌面确认后由 pinResultReceiver 落盘方案。 */
+    private fun applyCustomIcon(label: String) {
+        if (!AppAppearance.hasCustomIcon(this)) {
+            Toast.makeText(this, "请先选择一张图片", Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!ShortcutManagerCompat.isRequestPinShortcutSupported(this)) {
+            Toast.makeText(this, "当前桌面不支持固定快捷方式，无法使用自定义图标", Toast.LENGTH_LONG).show()
+            return
+        }
+        ConfigStore.setCustomIconLabel(this, label)
+        val ok = AppAppearance.requestCustomShortcut(
+            this, label.trim().ifEmpty { "通知转发" }, customPinCallback()
+        )
+        Toast.makeText(
+            this,
+            if (ok) "请在桌面弹窗中确认添加（取消则保持原外观）" else "生成失败，请重新选择图片",
+            Toast.LENGTH_SHORT
+        ).show()
     }
 
     /** 400ms 后拉起服务（给 stop 一点时间，避免 start/stop 竞态）。 */
@@ -265,6 +330,29 @@ class MainActivity : ComponentActivity() {
         var appProfile by remember { mutableStateOf(ConfigStore.appProfile(ctx)) }
         var notifTitle by remember { mutableStateOf(ConfigStore.notifTitle(ctx)) }
         var notifText by remember { mutableStateOf(ConfigStore.notifText(ctx)) }
+        // 自定义图标
+        var customIconBmp by remember { mutableStateOf(AppAppearance.loadIconBitmap(ctx)) }
+        var customLabel by remember { mutableStateOf(ConfigStore.customIconLabel(ctx)) }
+        var customPending by remember { mutableStateOf(false) }
+
+        val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null && AppAppearance.saveIconFromUri(ctx, uri)) {
+                customIconBmp = AppAppearance.loadIconBitmap(ctx)
+                Toast.makeText(ctx, "图片已保存", Toast.LENGTH_SHORT).show()
+            } else {
+                Toast.makeText(ctx, "图片读取失败，请换一张试试", Toast.LENGTH_SHORT).show()
+            }
+        }
+
+        // 桌面固定快捷方式结果：确认后（收到回调）才持久化「自定义」方案并隐藏内置 alias；取消则无回调，保持原外观
+        onCustomPinResult = {
+            if (customPending) {
+                customPending = false
+                ConfigStore.setAppProfile(ctx, AppAppearance.CUSTOM)
+                appProfile = AppAppearance.CUSTOM
+                Toast.makeText(ctx, "自定义图标已添加，原启动图标已隐藏", Toast.LENGTH_LONG).show()
+            }
+        }
 
         val modeDirty = pendingMode != null
         val displayMode = pendingMode ?: savedMode
@@ -566,14 +654,20 @@ class MainActivity : ComponentActivity() {
                                 selected = appProfile == p.key,
                                 onClick = {
                                     if (appProfile != p.key) {
-                                        appProfile = p.key
-                                        ConfigStore.setAppProfile(ctx, p.key)
-                                        AppAppearance.apply(ctx, p.key)
-                                        Toast.makeText(
-                                            ctx,
-                                            "已切换为「${p.label}」，桌面图标与名称稍后刷新",
-                                            Toast.LENGTH_LONG
-                                        ).show()
+                                        if (p.key == AppAppearance.CUSTOM) {
+                                            // 进入自定义编辑：不落盘，待桌面确认后再持久化
+                                            appProfile = AppAppearance.CUSTOM
+                                        } else {
+                                            customPending = false
+                                            appProfile = p.key
+                                            ConfigStore.setAppProfile(ctx, p.key)
+                                            AppAppearance.apply(ctx, p.key)
+                                            Toast.makeText(
+                                                ctx,
+                                                "已切换为「${p.label}」，桌面图标与名称稍后刷新",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
                                     }
                                 },
                                 shape = SegmentedButtonDefaults.itemShape(
@@ -585,13 +679,74 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
+                    if (appProfile == AppAppearance.CUSTOM) {
+                        Text(
+                            text = "自定义图标",
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "从相册选一张图片并命名，确认后桌面生成自定义快捷方式并隐藏原应用图标；切回其他方案可恢复（自定义快捷方式需手动移除）",
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            if (customIconBmp != null) {
+                                Image(
+                                    bitmap = customIconBmp!!.asImageBitmap(),
+                                    contentDescription = null,
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                )
+                            } else {
+                                Box(
+                                    modifier = Modifier
+                                        .size(48.dp)
+                                        .clip(RoundedCornerShape(10.dp))
+                                        .background(MaterialTheme.colorScheme.surfaceVariant),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(
+                                        text = "无图",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                            OutlinedButton(onClick = { pickImage.launch("image/*") }) {
+                                Text(if (customIconBmp == null) "选择图片" else "更换图片")
+                            }
+                        }
+                        OutlinedTextField(
+                            value = customLabel,
+                            onValueChange = { customLabel = it },
+                            label = { Text("桌面显示名称") },
+                            placeholder = { Text("通知转发") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Button(
+                            onClick = {
+                                customPending = true
+                                applyCustomIcon(customLabel)
+                            },
+                            enabled = customIconBmp != null,
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("生成桌面图标（隐藏原图标）") }
+                    }
+
                     Text(
                         text = "常驻通知内容",
                         fontSize = 15.sp,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "前台服务常驻通知的标题与正文，留空使用默认；仅显示在本机通知栏，不会转发到手环",
+                        text = "前台服务常驻通知的标题与副标题，留空表示不显示对应行；仅显示在本机通知栏，不会转发到手环",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -599,15 +754,15 @@ class MainActivity : ComponentActivity() {
                         value = notifTitle,
                         onValueChange = { notifTitle = it },
                         label = { Text("通知标题") },
-                        placeholder = { Text("通知转发服务运行中") },
+                        placeholder = { Text("留空则不显示标题") },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
                     OutlinedTextField(
                         value = notifText,
                         onValueChange = { notifText = it },
-                        label = { Text("通知正文") },
-                        placeholder = { Text("监听 0.0.0.0:${ConfigStore.port(ctx)}，等待 PC 推送") },
+                        label = { Text("通知副标题") },
+                        placeholder = { Text("留空则不显示副标题") },
                         modifier = Modifier.fillMaxWidth()
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -629,8 +784,8 @@ class MainActivity : ComponentActivity() {
                                 Intent(ctx, RelayService::class.java)
                                     .setAction(RelayService.ACTION_REFRESH_NOTIF)
                             )
-                            Toast.makeText(ctx, "已恢复默认常驻通知", Toast.LENGTH_SHORT).show()
-                        }) { Text("恢复默认") }
+                            Toast.makeText(ctx, "常驻通知内容已清空", Toast.LENGTH_SHORT).show()
+                        }) { Text("清空") }
                     }
                 }
             }
@@ -701,5 +856,6 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         private const val REQ_NOTIF = 1001
+        private const val ACTION_CUSTOM_PIN_RESULT = "com.mihuan.notifyrelay.action.CUSTOM_PIN_RESULT"
     }
 }

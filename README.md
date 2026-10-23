@@ -98,7 +98,7 @@
         ├── NotificationHelper.kt          # 通知渠道与发布
         ├── RelayService.kt                # 前台服务（保活；按模式启动 HTTP 服务或中继轮询）
         ├── BootReceiver.kt                # 开机自启（受「应用行为→开机自启」开关控制，且停机前服务需在运行）
-        ├── AppAppearance.kt               # 桌面名称/图标方案（activity-alias 切换：默认/记事本/计算器/天气）
+        ├── AppAppearance.kt               # 桌面名称/图标方案（4 个 activity-alias 切换 + 上传图片生成自定义桌面快捷方式）
         ├── ConfigStore.kt                 # 模式/token/port/中继配置/自启位/应用行为/外观方案/常驻通知内容持久化
         └── MainActivity.kt                # Jetpack Compose + Material3 界面（状态卡/模式切换/启停/测试/复制配置/应用行为设置/应用外观与通知/日志，Theme.kt 为配套主题）
 ```

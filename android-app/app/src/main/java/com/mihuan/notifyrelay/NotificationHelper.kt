@@ -36,17 +36,18 @@ object NotificationHelper {
         }
     }
 
-    /** 前台服务常驻通知：静默 + localOnly，避免转发到手环；标题/正文可由用户自定义（留空用默认）。 */
+    /**
+     * 前台服务常驻通知：静默 + localOnly，避免转发到手环。
+     * 标题/副标题由用户自定义，留空 = 不显示对应行（不回退默认文案）。
+     */
     fun serviceNotification(ctx: Context): Notification {
-        val title = ConfigStore.notifTitle(ctx).ifEmpty { "通知转发服务运行中" }
-        val text = ConfigStore.notifText(ctx).ifEmpty { "监听 0.0.0.0:${ConfigStore.port(ctx)}，等待 PC 推送" }
-        return NotificationCompat.Builder(ctx, CH_SERVICE)
+        val builder = NotificationCompat.Builder(ctx, CH_SERVICE)
             .setSmallIcon(R.drawable.ic_notification)
-            .setContentTitle(title)
-            .setContentText(text)
             .setOngoing(true)
             .setLocalOnly(true)
-            .build()
+        ConfigStore.notifTitle(ctx).takeIf { it.isNotEmpty() }?.let { builder.setContentTitle(it) }
+        ConfigStore.notifText(ctx).takeIf { it.isNotEmpty() }?.let { builder.setContentText(it) }
+        return builder.build()
     }
 
     /**

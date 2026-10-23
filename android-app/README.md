@@ -11,6 +11,12 @@ gradle assembleDebug          # 或 gradle assembleRelease（keystore.properties
 # 产物：app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## v2.5 新增
+
+- **自定义应用图标**：「应用外观与通知」卡新增「自定义」方案——上传图片 + 命名，确认后桌面生成自定义快捷方式并隐藏原图标；切回其他方案可恢复。
+- **常驻通知内容可留空**：标题/副标题留空 = 不显示对应行（不再回退默认文案）。
+- **修复**：切换外观方案后桌面同时出现新旧两个图标的 bug（未动过的 alias 处于 DEFAULT 状态未被禁用；应用启动时会自动收敛 alias 状态）。
+
 ## v2.4 新增
 
 - **清新淡蓝色界面**：应用主题与 Compose 配色整体换为淡蓝色系（与新版启动图标同源），深色模式跟随系统；语义状态色不变。

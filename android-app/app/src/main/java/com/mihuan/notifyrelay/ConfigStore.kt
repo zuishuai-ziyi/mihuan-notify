@@ -15,6 +15,7 @@ object ConfigStore {
     private const val KEY_APP_PROFILE = "app_profile"
     private const val KEY_NOTIF_TITLE = "notif_title"
     private const val KEY_NOTIF_TEXT = "notif_text"
+    private const val KEY_CUSTOM_ICON_LABEL = "custom_icon_label"
     private const val KEY_MODE = "mode"
     private const val KEY_RELAY_URL = "relay_url"
     private const val KEY_RELAY_CHANNEL = "relay_channel_id"
@@ -135,5 +136,12 @@ object ConfigStore {
 
     fun setNotifText(ctx: Context, value: String) {
         prefs(ctx).edit().putString(KEY_NOTIF_TEXT, value.trim()).apply()
+    }
+
+    /** 自定义桌面快捷方式的名称（配合自定义图标）。 */
+    fun customIconLabel(ctx: Context): String = prefs(ctx).getString(KEY_CUSTOM_ICON_LABEL, "")!!
+
+    fun setCustomIconLabel(ctx: Context, value: String) {
+        prefs(ctx).edit().putString(KEY_CUSTOM_ICON_LABEL, value.trim()).apply()
     }
 }
