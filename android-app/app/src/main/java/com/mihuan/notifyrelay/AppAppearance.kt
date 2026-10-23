@@ -62,11 +62,17 @@ object AppAppearance {
         }
 
         when (profileOf(key).key) {
-            CUSTOM -> PROFILES.forEach { p -> set(p.alias, PackageManager.COMPONENT_ENABLED_STATE_DISABLED) }
+            CUSTOM -> PROFILES.filter { it.alias.isNotEmpty() }.forEach { p ->
+                set(p.alias, PackageManager.COMPONENT_ENABLED_STATE_DISABLED)
+            }
             else -> {
                 val target = profileOf(key)
                 set(target.alias, PackageManager.COMPONENT_ENABLED_STATE_ENABLED)
-                PROFILES.filter { it.key != target.key }.forEach { p ->
+                // 注意：必须过滤掉 alias 为空的「自定义」方案——
+                // ComponentName(pkg, pkg) 不是真实组件，对它调用
+                // setComponentEnabledSetting 会抛 IllegalArgumentException
+                // 导致应用启动即崩溃（v2.5 事故）。
+                PROFILES.filter { it.key != target.key && it.alias.isNotEmpty() }.forEach { p ->
                     set(p.alias, PackageManager.COMPONENT_ENABLED_STATE_DISABLED)
                 }
             }

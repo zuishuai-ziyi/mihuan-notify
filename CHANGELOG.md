@@ -5,6 +5,11 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
+## v2.6.0（未发布）
+
+### 修复（Android）
+- **v2.5 打开即崩溃**：启动时收敛外观方案会对「自定义」方案的空 alias 构造出不存在的组件（`ComponentName(pkg, pkg)`），`setComponentEnabledSetting` 抛 `IllegalArgumentException`；已跳过空 alias。versionCode 11，versionName 2.6。
+
 ## v2.5.0（未发布）
 
 ### 变更

@@ -11,6 +11,10 @@ gradle assembleDebug          # 或 gradle assembleRelease（keystore.properties
 # 产物：app/build/outputs/apk/debug/app-debug.apk
 ```
 
+## v2.6 修复
+
+- 修复 v2.5 打开即崩溃的问题（启动时对外观方案的空 alias 调用组件启用接口抛异常）。
+
 ## v2.5 新增
 
 - **自定义应用图标**：「应用外观与通知」卡新增「自定义」方案——上传图片 + 命名，确认后桌面生成自定义快捷方式并隐藏原图标；切回其他方案可恢复。
