@@ -1,5 +1,6 @@
 <script setup>
 import { ref, onMounted } from 'vue'
+import BrandLogo from './BrandLogo.vue'
 import EyeIcon from './EyeIcon.vue'
 
 const emit = defineEmits(['ok', 'setup'])
@@ -66,7 +67,7 @@ async function submit() {
 <template>
   <div class="wrap">
     <div class="card">
-      <h1>通知转发 · 管理登录</h1>
+      <h1><BrandLogo :size="26" />通知转发 · 管理登录</h1>
       <button v-if="needsSetup" class="btn primary big" :disabled="loading" @click="enterSetup">
         {{ loading ? '进入中…' : '开始初始配置 →' }}
       </button>
@@ -93,7 +94,10 @@ async function submit() {
   border-radius: 8px;
   padding: 32px;
 }
-h1 { font-size: 18px; margin-bottom: 6px; }
+h1 {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 18px; margin-bottom: 6px;
+}
 form { display: flex; flex-direction: column; gap: 12px; }
 .pw-wrap { position: relative; }
 .pw-wrap input { padding-right: 34px; }

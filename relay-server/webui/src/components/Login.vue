@@ -1,6 +1,6 @@
 <template>
   <div class="login-box panel">
-    <h2>mihuan-notify 中继服务</h2>
+    <h2><BrandLogo :size="26" />mihuan-notify 中继服务</h2>
     <template v-if="needsSetup === null">
       <p class="setup-hint">正在检测服务状态…</p>
     </template>
@@ -22,6 +22,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { api } from '../api.js'
+import BrandLogo from './BrandLogo.vue'
 
 const emit = defineEmits(['done'])
 // null = 检测中（避免先闪现密码表单再切换成初始配置）
@@ -59,5 +60,6 @@ async function doLogin() {
 
 <style scoped>
 .login-box { max-width: 360px; margin: 10vh auto; }
+h2 { display: flex; align-items: center; gap: 8px; }
 .setup-hint { margin-bottom: 12px; color: var(--text2); font-size: 13px; }
 </style>

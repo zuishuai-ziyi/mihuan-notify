@@ -3,6 +3,7 @@
 // 免密登录后进入；保存走 /admin/api/config 表单模式（保存即热生效）。
 import { ref, computed } from 'vue'
 import { api, randHex } from '../api.js'
+import BrandLogo from './BrandLogo.vue'
 import EyeIcon from './EyeIcon.vue'
 
 const emit = defineEmits(['done'])
@@ -69,7 +70,7 @@ async function finish() {
 <template>
   <div class="wrap">
     <div class="card">
-      <h1>欢迎使用 · 首次配置</h1>
+      <h1><BrandLogo :size="26" />欢迎使用 · 首次配置</h1>
 
       <!-- 步骤 1：手机连接 -->
       <template v-if="step === 1">
@@ -147,7 +148,10 @@ async function finish() {
   background: #fff; border: 1px solid var(--border);
   border-radius: 8px; padding: 32px;
 }
-h1 { font-size: 18px; margin-bottom: 4px; }
+h1 {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 18px; margin-bottom: 4px;
+}
 .step-title { font-size: 15px; font-weight: 600; margin-bottom: 16px; }
 .field { margin-bottom: 14px; }
 label { display: block; color: var(--text2); font-size: 12px; margin-bottom: 4px; }

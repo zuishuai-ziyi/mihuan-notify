@@ -1,6 +1,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { api, fmtUptime } from '../api.js'
+import BrandLogo from './BrandLogo.vue'
 import StatusPanel from './StatusPanel.vue'
 import RecentPanel from './RecentPanel.vue'
 import TestPanel from './TestPanel.vue'
@@ -37,7 +38,7 @@ onUnmounted(() => clearInterval(timer))
 <template>
   <div class="layout">
     <header>
-      <span class="logo">通知转发 · PC 端管理</span>
+      <span class="logo"><BrandLogo :size="24" />通知转发 · PC 端管理</span>
       <span v-if="status" class="sub">
         v{{ status.version }} · 已运行 {{ fmtUptime(status.uptime_sec) }}
       </span>
@@ -66,7 +67,10 @@ header {
   display: flex; align-items: center; gap: 12px;
   margin-bottom: 16px;
 }
-.logo { font-size: 17px; font-weight: 600; }
+.logo {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 17px; font-weight: 600;
+}
 .sub { color: var(--text2); flex: 1; }
 nav { display: flex; gap: 4px; margin-bottom: 16px; border-bottom: 1px solid var(--border); }
 .tab {

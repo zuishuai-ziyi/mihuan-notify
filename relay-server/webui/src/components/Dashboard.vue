@@ -2,6 +2,7 @@
   <div class="dash">
     <header>
       <div class="brand">
+        <BrandLogo :size="24" />
         <b>mihuan-notify 中继服务</b>
         <span class="ver">{{ st.version }}</span>
         <span class="tag ok" v-if="docker">Docker</span>
@@ -26,6 +27,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { api, fmtUptime } from '../api.js'
+import BrandLogo from './BrandLogo.vue'
 import StatusPanel from './StatusPanel.vue'
 import ChannelsPanel from './ChannelsPanel.vue'
 import RecentPanel from './RecentPanel.vue'

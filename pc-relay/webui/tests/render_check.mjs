@@ -59,6 +59,7 @@ function compile(name, rewrites) {
 const rewriteDeps = [
   ["'../api.js'", "'./_rc_api.mjs'"],
   ['./EyeIcon.vue', './_rc_EyeIcon.mjs'],
+  ['./BrandLogo.vue', './_rc_BrandLogo.mjs'],
 ]
 
 // 桩：api 的每个方法都返回同一个「什么都有」的对象，够 ConfigPanel/SetupWizard 渲染
@@ -98,6 +99,7 @@ export const fmtTime = () => ''
   TMP.push(f)
 }
 compile('EyeIcon', [])
+compile('BrandLogo', [])
 compile('ConfigPanel', rewriteDeps)
 compile('Login', rewriteDeps)
 
