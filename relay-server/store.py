@@ -27,7 +27,7 @@ from pathlib import Path
 
 log = logging.getLogger("relay-server.store")
 
-VERSION = "1.0.1"
+VERSION = "1.0.2"
 
 # ---------------------------------------------------------------- 密码哈希（与 pc-relay 同格式）
 

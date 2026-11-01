@@ -9,7 +9,7 @@
 # 依赖：Windows Python（pyinstaller/tomlkit 已装）+ Node/npm（Windows 侧）+ WSL bash
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-VER="2.2.3"
+VER="2.2.4"
 NAME="mihuan-notify-pc-$VER-win64"
 OUT="$ROOT/dist"
 BUILD="$ROOT/build/pyinstaller"

@@ -41,7 +41,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("pc-relay")
 
-VERSION = "2.2.3"
+VERSION = "2.2.4"
 
 C = store_mod.load_runtime()          # 全局存储+配置单例（admin.py 经 bind 引用）
 STARTED_AT = time.time()

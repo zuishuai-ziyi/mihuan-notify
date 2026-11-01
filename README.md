@@ -265,7 +265,7 @@ bash pc-relay/tests/e2e_full.sh
 | [relay-server/README.md](relay-server/README.md) | 中继服务器部署/接口/安全说明 |
 | [android-app/README.md](android-app/README.md) | 手机端说明 |
 
-各组件版本号：PC `2.2.3` · Android `2.2` · 中继服务器 `1.0.1`，版本历史见 [CHANGELOG.md](CHANGELOG.md)。
+各组件版本号：PC `2.2.4` · Android `2.7` · 中继服务器 `1.0.2`，版本历史见 [CHANGELOG.md](CHANGELOG.md)。
 
 本项目以 [MIT License](LICENSE) 开源。欢迎通过 Issue 反馈问题、按 [CONTRIBUTING.md](CONTRIBUTING.md) 提交 PR。
 

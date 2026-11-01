@@ -5,21 +5,32 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-## v2.7.0（未发布）
+## PC v2.2.4 / 中继 v1.0.2（2026-11-01）
+
+### 新增（PC / 中继）
+- **品牌 Logo**：两端 Web UI 从纯文字标识换成「纸飞机（发送）」图标 + 文字并排——顶栏、登录页、首次配置向导的标题行统一改为图标在前（`display: flex` + 8px 间距），图标 24px（顶栏）/26px（卡片标题）随字号对齐。图标实现为内联 SVG 组件 `BrandLogo.vue`（`fill="currentColor"` 跟随主题前景色，深色模式无需额外适配）。
+- **浏览器标签页图标**：两端 Web UI 新增 `public/favicon.svg` 并在 `index.html` 加 `<link rel="icon" type="image/svg+xml">`；favicon 内颜色写死 `#409eff`（标签页没有主题上下文，不能用 currentColor）。
+
+### 变更（PC / 中继）
+- `pc-relay/webui/tests/render_check.mjs`：渲染检查补 `BrandLogo` 的 SFC 编译校验与 `./BrandLogo.vue` import 改写，避免新增组件在测试里被漏编译。
+- 版本号：PC `2.2.3` → `2.2.4`，中继服务器 `1.0.1` → `1.0.2`；Android 本次无改动。
+
+## v2.7.0（2026-11-01）
 
 ### 修复（Android）
+- **真机（MIUI）自定义图标被桌面回收后应用失去全部入口**：Redmi K30 Pro 实测，用户在桌面弹窗确认固定后，应用随即隐藏全部内置 alias，MIUI 桌面会在此时把刚固定的快捷方式一并回收——应用没有任何桌面入口（也无法用 adb 恢复）。三层修复：①顺序反转——先隐藏内置 alias 再请求固定（回收扫描发生在固定之前）；②安全网——启动/服务启动时检测「当前方案为自定义但桌面已查不到快捷方式」自动恢复到切换前的方案（`AppAppearance.recoverIfCustomLost()`，服务侧延迟 15s 避开开机后快捷方式状态未就绪窗口）；③全路径可回滚——生成失败、用户取消、6s 超时未固定均立即恢复原图标并提示。
+- **真机（MIUI/HyperOS）自定义图标无响应**：小米系统在应用未授予「桌面快捷方式」权限时会静默丢弃 `requestPinShortcut` 请求——不弹确认框、无回调、也不固定（Redmi K30 Pro / MIUI 12 实测），用户端表现为「点了生成毫无反应」。现在固定请求发出 6 秒后做一次兑底校验：已固定（桌面免确认直接创建）→ 按确认落地方案；未固定 → 回滚并弹出「桌面未响应固定请求」引导（小米设备文案直达 系统设置 → 应用管理 → 权限管理）。若用户在兑底弹窗后才去桌面确认，回调路径也能正确落地。请求链路补了 logcat 日志（tag `CustomIcon`）。
 - **自定义图标选图后提示「图片读取失败」**：`BitmapFactory.decodeStream()` 在 `inJustDecodeBounds = true` 时返回 null（只填充尺寸字段），旧代码错误地把它的返回值当成「流已打开」的判据，导致 `saveIconFromUri()` 永远提前返回 false。改为单独判断 `openInputStream` 是否为 null。
 - **点「取消」也被当作添加成功**：部分桌面（如 Lawnchair）在用户拒绝固定快捷方式时仍会发送 resultIntent，原来「收到回调即视为已确认」的假设不成立，导致取消后内置图标被隐藏、桌面却没有新图标，应用失去入口。改为回调后用 `ShortcutManager.getPinnedShortcuts()` 查询快捷方式是否真的被固定，未固定则提示「未添加到桌面，已保持原外观」并保持原方案。
 - **确认添加后原图标未立即消失**：原逻辑只在下次启动时才收敛 alias。现在确认成功即调用 `AppAppearance.apply()`，与 toast 提示一致。
-
 versionCode 12，versionName 2.7。
 
-## v2.6.0（未发布）
+## v2.6.0（随 v2.7.0 一并发布）
 
 ### 修复（Android）
 - **v2.5 打开即崩溃**：启动时收敛外观方案会对「自定义」方案的空 alias 构造出不存在的组件（`ComponentName(pkg, pkg)`），`setComponentEnabledSetting` 抛 `IllegalArgumentException`；已跳过空 alias。versionCode 11，versionName 2.6。
 
-## v2.5.0（未发布）
+## v2.5.0（随 v2.7.0 一并发布）
 
 ### 变更
 - Android：`versionCode` 9 → 10，`versionName` 2.4 → 2.5；PC / 中继服务器版本不变。
@@ -93,8 +104,8 @@ versionCode 12，versionName 2.7。
 ### 当前版本
 | 组件 | 版本 |
 |---|---|
-| pc-relay | 2.2.3 |
-| android-app | 2.2（versionCode 6） |
-| relay-server | 1.0.1 |
+| pc-relay | 2.2.4 |
+| android-app | 2.7（versionCode 12） |
+| relay-server | 1.0.2 |
 
 详细功能与部署说明见 [README.md](README.md)，协议规范见 [docs/protocol.md](docs/protocol.md)。
