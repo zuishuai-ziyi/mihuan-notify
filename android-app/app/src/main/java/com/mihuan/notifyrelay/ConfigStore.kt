@@ -13,6 +13,7 @@ object ConfigStore {
     private const val KEY_HIDE_RECENTS = "hide_recents"
     private const val KEY_LOG_LIMIT = "log_limit"
     private const val KEY_APP_PROFILE = "app_profile"
+    private const val KEY_APP_PROFILE_PREV = "app_profile_prev"
     private const val KEY_NOTIF_TITLE = "notif_title"
     private const val KEY_NOTIF_TEXT = "notif_text"
     private const val KEY_CUSTOM_ICON_LABEL = "custom_icon_label"
@@ -122,6 +123,14 @@ object ConfigStore {
 
     fun setAppProfile(ctx: Context, value: String) {
         prefs(ctx).edit().putString(KEY_APP_PROFILE, value).apply()
+    }
+
+    /** 切到「自定义」前所在的外观方案，用于快捷方式丢失/生成失败时回滚。 */
+    fun previousAppProfile(ctx: Context): String =
+        prefs(ctx).getString(KEY_APP_PROFILE_PREV, null) ?: AppAppearance.DEFAULT
+
+    fun setPreviousAppProfile(ctx: Context, value: String) {
+        prefs(ctx).edit().putString(KEY_APP_PROFILE_PREV, value).apply()
     }
 
     /** 常驻通知标题（空串 = 使用内置默认「通知转发服务运行中」）。 */

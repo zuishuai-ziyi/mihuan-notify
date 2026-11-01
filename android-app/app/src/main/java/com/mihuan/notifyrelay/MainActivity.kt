@@ -10,10 +10,13 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.provider.Settings
+import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -38,6 +41,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -97,6 +101,16 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** 桌面对固定请求无响应（超时）时的兑底回调：已固定则按确认处理，否则回滚并引导开权限。 */
+    private var onPinVerify: (() -> Unit)? = null
+
+    /** 回滚「自定义」方案的界面包装（Compose 侧赋值：刷新状态 + 提示）。 */
+    private var onCustomRevert: (() -> Unit)? = null
+
+    private val pinVerifyRunnable = Runnable {
+        if (!isDestroyed && !isFinishing) onPinVerify?.invoke()
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NotificationHelper.ensureChannels(this)
@@ -108,6 +122,10 @@ class MainActivity : ComponentActivity() {
             ContextCompat.RECEIVER_NOT_EXPORTED
         )
         requestNotificationPermission()
+
+        // 安全网：上次为「自定义」方案但桌面快捷方式已丢失（被桌面回收/用户误删）
+        // → 先恢复原方案，避免应用失去全部桌面入口；随后按（可能已被恢复的）方案收敛 alias
+        AppAppearance.recoverIfCustomLost(this)
 
         // 按保存的方案收敛桌面 alias 启用状态（修复旧版本「切换外观后新旧图标并存」的问题）
         AppAppearance.apply(this, ConfigStore.appProfile(this))
@@ -179,14 +197,39 @@ class MainActivity : ComponentActivity() {
             return
         }
         ConfigStore.setCustomIconLabel(this, label)
+        // 先隐藏内置 alias 再请求固定（顺序很关键）：实测 MIUI 桌面在应用禁用全部 alias
+        // 之后，会把「先固定后隐藏」流程中已固定的快捷方式一并回收，导致应用失去全部
+        // 桌面入口；改为先隐藏再固定，桌面的回收扫描发生在固定之前，快捷方式得以留存。
+        if (ConfigStore.appProfile(this) != AppAppearance.CUSTOM) {
+            ConfigStore.setPreviousAppProfile(this, ConfigStore.appProfile(this))
+        }
+        ConfigStore.setAppProfile(this, AppAppearance.CUSTOM)
+        AppAppearance.apply(this, AppAppearance.CUSTOM)
         val ok = AppAppearance.requestCustomShortcut(
             this, label.trim().ifEmpty { "通知转发" }, customPinCallback()
         )
+        if (ok) {
+            // 返回 true 只代表「请求已受理」。部分系统（MIUI/HyperOS 等）在未授予
+            // 「桌面快捷方式」权限时会静默丢弃请求：不弹确认框、无回调、也不固定。
+            // 定时兑底校验一次真实固定状态，见 onPinVerify。
+            handler.removeCallbacks(pinVerifyRunnable)
+            handler.postDelayed(pinVerifyRunnable, PIN_VERIFY_DELAY_MS)
+        } else {
+            // 请求未被受理：隐藏已发生，立即回滚（onCustomRevert 由 Compose 侧刷新状态）
+            onCustomRevert?.invoke()
+        }
         Toast.makeText(
             this,
-            if (ok) "请在桌面弹窗中确认添加（取消则保持原外观）" else "生成失败，请重新选择图片",
+            if (ok) "请在桌面弹窗中确认添加（取消或未确认将自动恢复原图标）" else "生成失败，已恢复原图标，请重新选择图片",
             Toast.LENGTH_SHORT
         ).show()
+    }
+
+    /** 从「自定义」方案回滚到切换前的方案（只改配置与 alias，界面状态由调用方刷新）。 */
+    private fun revertCustom() {
+        val prev = AppAppearance.profileOf(ConfigStore.previousAppProfile(this)).key
+        ConfigStore.setAppProfile(this, prev)
+        AppAppearance.apply(this, prev)
     }
 
     /** 400ms 后拉起服务（给 stop 一点时间，避免 start/stop 竞态）。 */
@@ -334,6 +377,8 @@ class MainActivity : ComponentActivity() {
         var customIconBmp by remember { mutableStateOf(AppAppearance.loadIconBitmap(ctx)) }
         var customLabel by remember { mutableStateOf(ConfigStore.customIconLabel(ctx)) }
         var customPending by remember { mutableStateOf(false) }
+        // 桌面对固定请求无响应时弹出的权限引导
+        var showPinHelp by remember { mutableStateOf(false) }
 
         val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             if (uri != null && AppAppearance.saveIconFromUri(ctx, uri)) {
@@ -344,23 +389,84 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-        // 桌面固定快捷方式结果：确认后（收到回调）才持久化「自定义」方案并隐藏内置 alias；取消则无回调，保持原外观
+        // 「自定义」方案落地：持久化并立即隐藏内置 alias（与 toast 提示一致）
+        val confirmCustom: () -> Unit = {
+            ConfigStore.setAppProfile(ctx, AppAppearance.CUSTOM)
+            // 必须立即收敛 alias，否则要等下次启动才会隐藏内置图标（toast 与实际不符）
+            AppAppearance.apply(ctx, AppAppearance.CUSTOM)
+            appProfile = AppAppearance.CUSTOM
+            Toast.makeText(ctx, "自定义图标已添加，原启动图标已隐藏", Toast.LENGTH_LONG).show()
+        }
+        // 「自定义」回滚（生成失败/取消/超时未固定）：恢复切换前的方案并刷新界面状态
+        val doRevert: () -> Unit = {
+            customPending = false
+            revertCustom()
+            appProfile = ConfigStore.appProfile(ctx)
+            Toast.makeText(ctx, "已恢复原桌面图标", Toast.LENGTH_LONG).show()
+        }
+        onCustomRevert = { doRevert() }
+        // 桌面固定快捷方式结果：确认（收到回调且已固定）→ 落地方案；否则回滚
         onCustomPinResult = {
-            if (customPending) {
+            // 兑底弹窗可能已把 customPending 清掉；若用户此刻才在桌面确认，仍要落地方案
+            showPinHelp = false
+            if (AppAppearance.isCustomShortcutPinned(ctx)) {
                 customPending = false
+                confirmCustom()
+            } else if (customPending) {
                 // 注意：部分桌面（如 Lawnchair）即使用户点「取消」也会发送回调，
                 // 因此必须查询已固定列表才能确认真的添加成功。
+                doRevert()
+            }
+        }
+        // 兑底校验（applyCustomIcon 请求成功后 6s）：部分系统（MIUI/HyperOS 等）在
+        // 未授予「桌面快捷方式」权限时会静默丢弃固定请求——不弹窗、无回调。此时：
+        // 已固定（桌面免确认直接创建）→ 按确认处理；未固定 → 先回滚（原图标已隐藏，
+        // 不能让应用失去入口），再弹权限引导。
+        onPinVerify = {
+            if (customPending) {
                 if (AppAppearance.isCustomShortcutPinned(ctx)) {
-                    ConfigStore.setAppProfile(ctx, AppAppearance.CUSTOM)
-                    // 必须立即收敛 alias，否则要等下次启动才会隐藏内置图标（toast 与实际不符）
-                    AppAppearance.apply(ctx, AppAppearance.CUSTOM)
-                    appProfile = AppAppearance.CUSTOM
-                    Toast.makeText(ctx, "自定义图标已添加，原启动图标已隐藏", Toast.LENGTH_LONG).show()
+                    customPending = false
+                    confirmCustom()
                 } else {
-                    appProfile = ConfigStore.appProfile(ctx)
-                    Toast.makeText(ctx, "未添加到桌面，已保持原外观", Toast.LENGTH_SHORT).show()
+                    doRevert()
+                    showPinHelp = true
                 }
             }
+        }
+
+        if (showPinHelp) {
+            AlertDialog(
+                onDismissRequest = { showPinHelp = false },
+                title = { Text("桌面未响应固定请求") },
+                text = {
+                    Text(
+                        if (Build.MANUFACTURER.contains("xiaomi", ignoreCase = true))
+                            "小米/红米系统未弹出确认窗口，多半是默认禁止了「桌面快捷方式」权限（请求被静默忽略），已为你恢复原来的桌面图标。" +
+                                "请到 系统设置 → 应用管理 → 通知转发 → 权限管理 中允许「桌面快捷方式」，再回来重新点「生成桌面图标」。"
+                        else
+                            "当前系统未弹出确认窗口，可能禁止了本应用创建桌面快捷方式（请求被静默忽略），已为你恢复原来的桌面图标。" +
+                                "请在系统设置的应用权限中允许「创建桌面快捷方式」，再重新操作。"
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        showPinHelp = false
+                        try {
+                            startActivity(
+                                Intent(
+                                    Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.fromParts("package", packageName, null)
+                                )
+                            )
+                        } catch (e: Exception) {
+                            Toast.makeText(ctx, "请手动到系统设置中开启权限", Toast.LENGTH_LONG).show()
+                        }
+                    }) { Text("去开启") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { showPinHelp = false }) { Text("知道了") }
+                }
+            )
         }
 
         val modeDirty = pendingMode != null
@@ -866,5 +972,8 @@ class MainActivity : ComponentActivity() {
     companion object {
         private const val REQ_NOTIF = 1001
         private const val ACTION_CUSTOM_PIN_RESULT = "com.mihuan.notifyrelay.action.CUSTOM_PIN_RESULT"
+
+        /** 固定请求发出后多久做一次兑底校验（弹窗确认正常在 1~2s 内完成）。 */
+        private const val PIN_VERIFY_DELAY_MS = 6000L
     }
 }

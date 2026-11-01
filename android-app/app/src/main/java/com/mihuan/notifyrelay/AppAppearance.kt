@@ -9,6 +9,7 @@ import android.content.pm.ShortcutManager
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
+import android.util.Log
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
 import androidx.core.graphics.drawable.IconCompat
@@ -80,11 +81,30 @@ object AppAppearance {
         }
     }
 
+    /**
+     * 安全网：若当前方案为「自定义」但桌面已查不到对应快捷方式（被桌面回收、用户误删，
+     * 或 MIUI 等系统在应用隐藏全部 alias 后把快捷方式一并清掉），恢复到切换前的方案，
+     * 避免应用失去全部桌面入口。返回 true 表示已执行恢复。
+     *
+     * 调用时机：MainActivity onCreate（点图标/通知进应用时）与 RelayService 启动
+     * （应用无桌面入口时唯一的自救路径；服务侧延迟校验，避开开机后快捷方式状态未就绪窗口）。
+     */
+    fun recoverIfCustomLost(ctx: Context): Boolean {
+        if (ConfigStore.appProfile(ctx) != CUSTOM) return false
+        if (isCustomShortcutPinned(ctx)) return false
+        val prev = profileOf(ConfigStore.previousAppProfile(ctx)).key
+        ConfigStore.setAppProfile(ctx, prev)
+        apply(ctx, prev)
+        Log.w(TAG, "custom shortcut no longer pinned, reverted profile to $prev")
+        return true
+    }
+
     // ---------- 自定义图标 ----------
 
     private const val CUSTOM_ICON_FILE = "custom_icon.png"
     private const val CUSTOM_SHORTCUT_ID = "custom_launcher_icon"
     private const val MAX_ICON_DIM = 512
+    private const val TAG = "CustomIcon"
 
     /** 用户上传的图标图片（内部存储，随应用卸载删除）。 */
     fun iconFile(ctx: Context): File = File(ctx.filesDir, CUSTOM_ICON_FILE)
@@ -135,8 +155,14 @@ object AppAppearance {
      * 由调用方在「用户确认」后再调用 [apply] 隐藏内置 alias。
      */
     fun requestCustomShortcut(ctx: Context, label: String, pinCallback: PendingIntent): Boolean {
-        val bmp = loadIconBitmap(ctx) ?: return false
-        if (!ShortcutManagerCompat.isRequestPinShortcutSupported(ctx)) return false
+        val bmp = loadIconBitmap(ctx) ?: run {
+            Log.i(TAG, "requestCustomShortcut: icon decode failed")
+            return false
+        }
+        if (!ShortcutManagerCompat.isRequestPinShortcutSupported(ctx)) {
+            Log.i(TAG, "requestCustomShortcut: isRequestPinShortcutSupported=false")
+            return false
+        }
 
         val shortcut = ShortcutInfoCompat.Builder(ctx, CUSTOM_SHORTCUT_ID)
             .setShortLabel(label.ifEmpty { "通知转发" })
@@ -147,7 +173,11 @@ object AppAppearance {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
             )
             .build()
-        return ShortcutManagerCompat.requestPinShortcut(ctx, shortcut, pinCallback.intentSender)
+        val ok = ShortcutManagerCompat.requestPinShortcut(ctx, shortcut, pinCallback.intentSender)
+        // 注意：返回 true 只表示「请求已受理」。部分系统（如 MIUI/HyperOS）在应用
+        // 未授予「桌面快捷方式」权限时会静默丢弃请求：不弹确认框、无回调、也不固定。
+        Log.i(TAG, "requestPinShortcut -> $ok")
+        return ok
     }
 
     /**

@@ -2,7 +2,9 @@ package com.mihuan.notifyrelay
 
 import android.app.Service
 import android.content.Intent
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import fi.iki.elonen.NanoHTTPD
 import java.io.IOException
 import java.text.SimpleDateFormat
@@ -24,6 +26,14 @@ class RelayService : Service() {
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        if (intent?.action != ACTION_STOP) {
+            // 安全网：应用处于「自定义」方案但桌面快捷方式已丢失时，服务启动是唯一的
+            // 自救路径（此时无任何桌面入口可进应用）。延迟 15s 校验，避开开机后
+            // 快捷方式状态尚未就绪的窗口（开机自启场景），避免误恢复。
+            Handler(Looper.getMainLooper()).postDelayed({
+                AppAppearance.recoverIfCustomLost(this)
+            }, 15_000L)
+        }
         when (intent?.action) {
             ACTION_STOP -> {
                 log("收到停止指令")
