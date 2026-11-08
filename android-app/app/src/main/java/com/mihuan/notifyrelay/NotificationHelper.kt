@@ -5,6 +5,7 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.Context
 import androidx.core.app.NotificationCompat
+import com.mihuan.notifyrelay.NotificationIcons.Slot
 
 /**
  * 系统通知发布。
@@ -42,9 +43,9 @@ object NotificationHelper {
      */
     fun serviceNotification(ctx: Context): Notification {
         val builder = NotificationCompat.Builder(ctx, CH_SERVICE)
-            .setSmallIcon(R.drawable.ic_notification)
             .setOngoing(true)
             .setLocalOnly(true)
+        applyIcons(builder, ctx, Slot.SERVICE)
         ConfigStore.notifTitle(ctx).takeIf { it.isNotEmpty() }?.let { builder.setContentTitle(it) }
         ConfigStore.notifText(ctx).takeIf { it.isNotEmpty() }?.let { builder.setContentText(it) }
         return builder.build()
@@ -63,7 +64,6 @@ object NotificationHelper {
     ): Int {
         val high = priority == "high"
         val builder = NotificationCompat.Builder(ctx, if (high) CH_HIGH else CH_NORMAL)
-            .setSmallIcon(R.drawable.ic_notification)
             .setContentTitle(title)
             .setContentText(body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
@@ -71,10 +71,30 @@ object NotificationHelper {
             .setAutoCancel(true)
         source?.let { builder.setSubText(it) }
         if (high) builder.setPriority(NotificationCompat.PRIORITY_HIGH)
+        applyIcons(builder, ctx, Slot.FORWARD)
 
         val nid = id.hashCode()
         val nm = ctx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         nm.notify(nid, builder.build())
         return nid
+    }
+
+    /**
+     * 应用通知图标（用户可在设置页为常驻通知 / 转发通知分别指定）。
+     *
+     * 两条链路：
+     *  - smallIcon：状态栏小图标。默认用内置矢量图 R.drawable.ic_notification；
+     *    有自定义剪影时再用 IconCompat 覆盖（系统只取 alpha 形状，故剪影为白色 alpha）。
+     *  - largeIcon：通知栏展开时的大图（长边 ≤256px，避免 Binder 传输超限）。
+     *
+     * 线程：这两个方法内部会读文件 + 解码位图，调用方需自行保证在 IO 线程。
+     * 实际调用点：转发通知在引擎线程发布；常驻通知由前台服务在主线程 startForeground
+     * 触发——设置页换图后已在 IO 线程预热 NotificationIcons 的内存缓存，
+     * 该路径只会命中缓存（仅一次文件 stat），不再做磁盘读与解码。
+     */
+    private fun applyIcons(builder: NotificationCompat.Builder, ctx: Context, slot: Slot) {
+        builder.setSmallIcon(R.drawable.ic_notification)
+        NotificationIcons.loadSmallIcon(ctx, slot)?.let { builder.setSmallIcon(it) }
+        NotificationIcons.loadLargeIcon(ctx, slot)?.let { builder.setLargeIcon(it) }
     }
 }
