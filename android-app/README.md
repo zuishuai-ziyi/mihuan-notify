@@ -11,11 +11,6 @@ gradle assembleDebug          # 或 gradle assembleRelease（keystore.properties
 # 产物：app/build/outputs/apk/debug/app-debug.apk
 ```
 
-## v2.8 新增
-
-- targetSdk/compileSdk 34，versionCode 13 / versionName 2.8
-- **指定通知图标**：「应用外观与通知」卡新增「通知图标」小节，可分别为「常驻通知」和「转发通知」选择图标（相册/文件选图，可「恢复默认」）。所选图自动生成白色剪影作状态栏小图标（≤96x96）、降采样原图作通知大图（≤256px）；转发通知高频发送走内存缓存。
-
 ## v2.7 修复
 
 - 修复自定义图标选图后总是提示「图片读取失败」的问题（解码边界探测的返回值判据错误）。

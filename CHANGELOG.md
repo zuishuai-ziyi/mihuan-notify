@@ -5,15 +5,6 @@
 
 格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/1.1.0/)。
 
-## v2.8.0（2026-11-08）
-
-### 新增（Android）
-- **指定通知图标**：「应用外观与通知」卡新增「通知图标」小节，可分别为「常驻通知」（前台服务常驻通知）与「转发通知」（每条转发消息通知）从相册/文件选一张图片作为图标。选中的图立即复制为应用内部存储的本地 PNG（原图长边 ≤512px），不依赖选图 Uri 的临时权限；不选则回退默认矢量图标 `ic_notification`，也可随时「恢复默认」。
-  - **一张图双用**：所选图降采样后作通知大图（largeIcon，长边 ≤256px），同时自动生成白色 alpha 剪影作状态栏小图标（smallIcon，≤96x96）。剪影在图片含透明像素时直接沿用原 alpha；全不透明时按亮度做软阈值并自动判断极性（浅底深图 / 深底浅图）。
-  - 转发通知高频发送，图标走内存缓存（按文件指纹失效），不会每条消息都解码磁盘；换图/清除时主动失效对应槽位。
-  - 更换常驻通知图标后立即通过 `ACTION_REFRESH_NOTIF` 重建前台通知。
-versionCode 13，versionName 2.8。
-
 ## PC v2.2.4 / 中继 v1.0.2（2026-11-01）
 
 ### 新增（PC / 中继）
@@ -114,7 +105,7 @@ versionCode 12，versionName 2.7。
 | 组件 | 版本 |
 |---|---|
 | pc-relay | 2.2.4 |
-| android-app | 2.8（versionCode 13） |
+| android-app | 2.7（versionCode 12） |
 | relay-server | 1.0.2 |
 
 详细功能与部署说明见 [README.md](README.md)，协议规范见 [docs/protocol.md](docs/protocol.md)。
