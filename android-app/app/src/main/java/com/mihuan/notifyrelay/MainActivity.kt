@@ -10,6 +10,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -63,6 +64,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -78,7 +80,10 @@ import androidx.compose.ui.unit.sp
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.pm.ShortcutManagerCompat
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.net.Inet4Address
 import java.net.NetworkInterface
 
@@ -379,6 +384,15 @@ class MainActivity : ComponentActivity() {
         var customPending by remember { mutableStateOf(false) }
         // 桌面对固定请求无响应时弹出的权限引导
         var showPinHelp by remember { mutableStateOf(false) }
+        // 通知图标（常驻通知 / 转发通知）：读盘解码走 IO 线程，用 token 触发重新加载
+        var notifIconToken by remember { mutableIntStateOf(0) }
+        var serviceIconBmp by remember { mutableStateOf<Bitmap?>(null) }
+        var forwardIconBmp by remember { mutableStateOf<Bitmap?>(null) }
+        // 「是否已自定义」以文件是否存在为准（NotificationIcons.hasCustom）：
+        // 比「预览位图是否非空」更准——位图解码失败时文件仍在，不该显示成「默认」
+        var serviceIconCustom by remember { mutableStateOf(false) }
+        var forwardIconCustom by remember { mutableStateOf(false) }
+        val scope = rememberCoroutineScope()
 
         val pickImage = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
             if (uri != null && AppAppearance.saveIconFromUri(ctx, uri)) {
@@ -387,6 +401,73 @@ class MainActivity : ComponentActivity() {
             } else {
                 Toast.makeText(ctx, "图片读取失败，请换一张试试", Toast.LENGTH_SHORT).show()
             }
+        }
+
+        // 通知图标选图：两个槽位各自绑定一个 launcher，避免共用时串槽
+        val pickServiceIcon = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) {
+                scope.launch {
+                    val ok = withContext(Dispatchers.IO) {
+                        val r = NotificationIcons.setFromUri(ctx, NotificationIcons.Slot.SERVICE, uri)
+                        if (r) {
+                            // 预热本槽位缓存：换图后 setFromUri 已清掉缓存，随后
+                            // refreshServiceNotification 会让服务在**主线程**重建常驻通知
+                            // （读盘 + 解码），这里先在 IO 线程解码好，之后只走缓存命中
+                            NotificationIcons.loadSmallIcon(ctx, NotificationIcons.Slot.SERVICE)
+                            NotificationIcons.loadLargeIcon(ctx, NotificationIcons.Slot.SERVICE)
+                        }
+                        r
+                    }
+                    if (ok) {
+                        notifIconToken++
+                        refreshServiceNotification(ctx)
+                        Toast.makeText(ctx, "常驻通知图标已更新", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(ctx, "图片读取失败，请换一张试试", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+        val pickForwardIcon = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
+            if (uri != null) {
+                scope.launch {
+                    val ok = withContext(Dispatchers.IO) {
+                        val r = NotificationIcons.setFromUri(ctx, NotificationIcons.Slot.FORWARD, uri)
+                        if (r) {
+                            // 同上：预热本槽位，避免转发通知（引擎线程）第一次发布时现场解码
+                            NotificationIcons.loadSmallIcon(ctx, NotificationIcons.Slot.FORWARD)
+                            NotificationIcons.loadLargeIcon(ctx, NotificationIcons.Slot.FORWARD)
+                        }
+                        r
+                    }
+                    if (ok) {
+                        notifIconToken++
+                        Toast.makeText(ctx, "转发通知图标已更新", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(ctx, "图片读取失败，请换一张试试", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            }
+        }
+
+        // 预览图：解码走 IO 线程（文件 IO 不能放主线程），完成后写回 state 触发重组
+        LaunchedEffect(notifIconToken) {
+            val svc = withContext(Dispatchers.IO) {
+                IconPreview(
+                    NotificationIcons.loadLargeIcon(ctx, NotificationIcons.Slot.SERVICE),
+                    NotificationIcons.hasCustom(ctx, NotificationIcons.Slot.SERVICE)
+                )
+            }
+            val fwd = withContext(Dispatchers.IO) {
+                IconPreview(
+                    NotificationIcons.loadLargeIcon(ctx, NotificationIcons.Slot.FORWARD),
+                    NotificationIcons.hasCustom(ctx, NotificationIcons.Slot.FORWARD)
+                )
+            }
+            serviceIconBmp = svc.bmp
+            serviceIconCustom = svc.custom
+            forwardIconBmp = fwd.bmp
+            forwardIconCustom = fwd.custom
         }
 
         // 「自定义」方案落地：持久化并立即隐藏内置 alias（与 toast 提示一致）
@@ -884,10 +965,7 @@ class MainActivity : ComponentActivity() {
                         FilledTonalButton(onClick = {
                             ConfigStore.setNotifTitle(ctx, notifTitle)
                             ConfigStore.setNotifText(ctx, notifText)
-                            ctx.startService(
-                                Intent(ctx, RelayService::class.java)
-                                    .setAction(RelayService.ACTION_REFRESH_NOTIF)
-                            )
+                            refreshServiceNotification(ctx)
                             Toast.makeText(ctx, "常驻通知内容已应用", Toast.LENGTH_SHORT).show()
                         }) { Text("应用通知内容") }
                         TextButton(onClick = {
@@ -895,13 +973,54 @@ class MainActivity : ComponentActivity() {
                             notifText = ""
                             ConfigStore.setNotifTitle(ctx, "")
                             ConfigStore.setNotifText(ctx, "")
-                            ctx.startService(
-                                Intent(ctx, RelayService::class.java)
-                                    .setAction(RelayService.ACTION_REFRESH_NOTIF)
-                            )
+                            refreshServiceNotification(ctx)
                             Toast.makeText(ctx, "常驻通知内容已清空", Toast.LENGTH_SHORT).show()
                         }) { Text("清空") }
                     }
+
+                    Text(
+                        text = "通知图标",
+                        fontSize = 15.sp,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        text = "从相册选一张图片作为通知图标：所选图片同时用作通知大图与状态栏小图标（自动生成白色剪影）；常驻通知与转发通知可分别指定；不选则使用应用默认图标",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    NotifIconRow(
+                        title = "常驻通知图标",
+                        bmp = serviceIconBmp,
+                        custom = serviceIconCustom,
+                        onPick = { pickServiceIcon.launch("image/*") },
+                        onClear = {
+                            scope.launch {
+                                withContext(Dispatchers.IO) {
+                                    // clear 内部已删文件 + 清缓存，无需预热
+                                    NotificationIcons.clear(ctx, NotificationIcons.Slot.SERVICE)
+                                }
+                                notifIconToken++
+                                refreshServiceNotification(ctx)
+                                Toast.makeText(ctx, "已恢复默认通知图标", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
+                    NotifIconRow(
+                        title = "转发通知图标",
+                        bmp = forwardIconBmp,
+                        custom = forwardIconCustom,
+                        onPick = { pickForwardIcon.launch("image/*") },
+                        onClear = {
+                            scope.launch {
+                                withContext(Dispatchers.IO) {
+                                    // clear 内部已删文件 + 清缓存，无需预热
+                                    NotificationIcons.clear(ctx, NotificationIcons.Slot.FORWARD)
+                                }
+                                notifIconToken++
+                                Toast.makeText(ctx, "已恢复默认通知图标", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    )
                 }
             }
 
@@ -938,6 +1057,94 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    /**
+     * 通知图标条目：圆角缩略预览 + 「选择图片 / 更换图片」「恢复默认」。
+     * 样式沿用「自定义图标」块（48dp 圆角预览 + OutlinedButton/TextButton）。
+     */
+    /**
+     * 通知图标预览：位图（null = 未自定义或解码失败）与「是否已自定义」标记。
+     * 两者分开：文件存在但解码失败时，位图是 null，但用户确实设过自定义图标。
+     */
+    private data class IconPreview(val bmp: Bitmap?, val custom: Boolean)
+
+    @Composable
+    private fun NotifIconRow(
+        title: String,
+        bmp: Bitmap?,
+        custom: Boolean,
+        onPick: () -> Unit,
+        onClear: () -> Unit
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(text = title, fontSize = 15.sp, color = MaterialTheme.colorScheme.onSurface)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                if (bmp != null) {
+                    Image(
+                        bitmap = bmp.asImageBitmap(),
+                        contentDescription = null,
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                    )
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(48.dp)
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = if (custom) "已设置" else "默认",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+                Column(
+                    modifier = Modifier.weight(1f),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        text = if (custom) "已使用自定义图标" else "当前使用默认图标",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = onPick) {
+                            Text(if (custom) "更换图片" else "选择图片")
+                        }
+                        if (custom) {
+                            TextButton(onClick = onClear) { Text("恢复默认") }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * 通知图标变更 → 让前台服务重建常驻通知（复用 ACTION_REFRESH_NOTIF）。
+     * 只在服务确实在跑时发 intent：ACTION_REFRESH_NOTIF 分支本身不会启动消息引擎，
+     * 但 startService 会把服务拉起来且返回 START_STICKY——服务被系统回收后重启
+     * （intent 为 null）会走「正常启动」路径，可能误启动消息引擎。
+     */
+    private fun refreshServiceNotification(ctx: Context) {
+        if (!RelayService.running) return
+        try {
+            ctx.startService(
+                Intent(ctx, RelayService::class.java)
+                    .setAction(RelayService.ACTION_REFRESH_NOTIF)
+            )
+        } catch (e: Exception) {
+            Log.w("NotifyRelay", "刷新常驻通知失败: ${e.message}")
         }
     }
 
