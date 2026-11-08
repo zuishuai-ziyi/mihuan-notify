@@ -23,6 +23,14 @@ class RelayService : Service() {
     private var server: NotifyServer? = null
     private var poller: RelayPoller? = null
 
+    /**
+     * 本实例是否已调用 startForeground（前台常驻通知已挂着）。
+     * 与静态标志 running 区分：running 是进程级标志，表示「消息引擎已启动」；
+     * hasForeground 表示「当前这个 Service 实例是否真的是前台服务」。
+     * 仅主线程读写（onStartCommand / onDestroy 回调）。
+     */
+    private var hasForeground = false
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -38,26 +46,57 @@ class RelayService : Service() {
             ACTION_STOP -> {
                 log("收到停止指令")
                 ConfigStore.setAutoStart(this, false) // 用户手动停用：重启后不再自启
+                // 立即标记为未运行：stopSelf() 到 onDestroy() 之间不应再被当作「在跑」
+                //（否则这段时间里到达的刷新请求会重建前台通知，残留一个已 start 的服务）
+                running = false
+                hasForeground = false
                 stopSelf()
                 return START_NOT_STICKY
             }
             ACTION_TEST -> {
+                // 测试通知本身不依赖前台服务（走 NotificationManager.notify），通知照发。
+                // 但「本实例从未 startForeground」时绝不能返回 START_STICKY：
+                // 那会留下一个「已 start 但从未 startForeground」的粘性服务，
+                // 系统之后以 intent == null 重启它时会走正常启动路径
+                // → startEngine() + ConfigStore.setAutoStart(true)，消息引擎被静默拉起。
+                // 处理：不保留服务实例（stopSelf(startId)），返回 START_NOT_STICKY。
+                // 判据用 hasForeground（本实例是否已挂前台通知），而不是 running：
+                // ACTION_TEST 是轻量分支，本身不启引擎、也不置 running；
+                // running 又是进程级静态标志（服务未启动/已停止时为 false），
+                // 若照搬 running 判断会把「服务未运行时点测试通知」的功能一起废掉。
+                if (!hasForeground) {
+                    log("测试通知：服务未运行（未挂前台通知），仅发送通知、不保留服务")
+                    sendTestNotification()
+                    stopSelf(startId)
+                    return START_NOT_STICKY
+                }
                 sendTestNotification()
                 return START_STICKY
             }
             ACTION_REFRESH_NOTIF -> {
-                // 常驻通知内容变更：服务运行中则重建前台通知，否则下次启动时自然生效
-                if (running) {
-                    NotificationHelper.ensureChannels(this)
-                    startForeground(NOTIF_ID, NotificationHelper.serviceNotification(this))
-                    log("常驻通知内容已更新")
+                // 仅在服务确实在跑（引擎已启动、前台通知已挂着）时重建常驻通知。
+                // 若此刻服务未运行（例如刚被系统回收、或刷新请求抢在服务启动前到达），
+                // 绝不能返回 START_STICKY：那会留下一个「已 start 但从未 startForeground」
+                // 的粘性服务，系统之后以 intent == null 重启它时会走正常启动路径
+                // → startEngine() + ConfigStore.setAutoStart(true)，消息引擎被静默拉起。
+                // 处理：本次刷新请求作废，stopSelf(startId) 让服务不残留，
+                // 返回 START_NOT_STICKY（下次用户主动启动时通知内容自然生效）。
+                if (!running) {
+                    log("常驻通知刷新：服务未运行，忽略本次刷新")
+                    stopSelf(startId)
+                    return START_NOT_STICKY
                 }
+                NotificationHelper.ensureChannels(this)
+                startForeground(NOTIF_ID, NotificationHelper.serviceNotification(this))
+                hasForeground = true
+                log("常驻通知内容已更新")
                 return START_STICKY
             }
         }
 
         NotificationHelper.ensureChannels(this)
         startForeground(NOTIF_ID, NotificationHelper.serviceNotification(this))
+        hasForeground = true
 
         applyLogLimit(ConfigStore.logLimit(this))
         startEngine()
@@ -146,6 +185,7 @@ class RelayService : Service() {
     override fun onDestroy() {
         stopEngine()
         running = false
+        hasForeground = false
         log("服务已停止")
         super.onDestroy()
     }
